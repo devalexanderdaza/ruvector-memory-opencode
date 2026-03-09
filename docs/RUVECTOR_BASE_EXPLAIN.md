@@ -33,22 +33,22 @@ npx @ruvector/cli hooks init && npx @ruvector/cli hooks install
 ### Minimal TypeScript Example
 
 ```typescript
-import { VectorDb, VectorEntry, SearchResult } from '@ruvector/core';
+import { VectorDb, VectorEntry, SearchResult } from "@ruvector/core";
 
 const db = new VectorDb({
-  dimensions: 1536,           // Match your embedding model's output dimension
-  maxElements: 100_000,       // Pre-allocate index capacity
-  storagePath: './vectors.db', // Omit for in-memory-only mode
-  distanceMetric: 'cosine',   // Best for normalized LLM embeddings (OpenAI, Cohere)
-  ef_construction: 200,       // Higher = better recall, slower builds
-  m: 16,                      // Higher = better recall, more memory
+  dimensions: 1536, // Match your embedding model's output dimension
+  maxElements: 100_000, // Pre-allocate index capacity
+  storagePath: "./vectors.db", // Omit for in-memory-only mode
+  distanceMetric: "cosine", // Best for normalized LLM embeddings (OpenAI, Cohere)
+  ef_construction: 200, // Higher = better recall, slower builds
+  m: 16, // Higher = better recall, more memory
 });
 
 // Insert a vector with metadata
 const entry: VectorEntry = {
-  id: 'doc_1',
+  id: "doc_1",
   vector: new Float32Array(1536), // Replace with a real embedding from your model
-  metadata: { source: 'my-docs', category: 'technical' },
+  metadata: { source: "my-docs", category: "technical" },
 };
 const id = await db.insert(entry);
 
@@ -62,34 +62,35 @@ const results: SearchResult[] = await db.search({
 
 ## Documentation Index
 
-| Document | Description |
-|----------|-------------|
-| [Architecture](ruvector/architecture.md) | System design, Mermaid diagrams, DDD bounded contexts |
-| [Core API](ruvector/core-api.md) | `@ruvector/core` — VectorDb class, HNSW, distance metrics |
-| [RVF Cognitive Containers](ruvector/rvf-cognitive-containers.md) | `.rvf` format, COW branching, witness chains, CLI |
-| [SONA Engine](ruvector/sona-engine.md) | Self-learning, Micro-LoRA, EWC++, trajectory recording |
-| [Attention Mechanisms](ruvector/attention-mechanisms.md) | 46 attention types, GNN integration patterns |
-| [Ecosystem Packages](ruvector/ecosystem-packages.md) | All 49+ npm packages — installation matrix |
-| [Use Cases](ruvector/use-cases.md) | RAG, agent memory, semantic search, swarms — with TypeScript code |
-| [Performance & Security](ruvector/performance-security.md) | Benchmarks, SIMD, quantization, post-quantum crypto |
-| [PostgreSQL Extension](ruvector/postgresql-extension.md) | Drop-in pgvector replacement, 290+ SQL functions |
-| [Deployment](ruvector/deployment.md) | Node.js, Browser, Edge, Docker, self-booting `.rvf` |
-| [MCP Integration](ruvector/mcp-integration.md) | Model Context Protocol server for AI agents |
-| [Troubleshooting](ruvector/troubleshooting.md) | Diagnostic matrix, HNSW tuning, performance fixes |
+| Document                                                         | Description                                                                             |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| [Vector Databases Overview](ruvector/vector-databases.md)        | Introduction to vector databases, their use cases, and key concepts focused on RuVector |
+| [Architecture](ruvector/architecture.md)                         | System design, Mermaid diagrams, DDD bounded contexts                                   |
+| [Core API](ruvector/core-api.md)                                 | `@ruvector/core` — VectorDb class, HNSW, distance metrics                               |
+| [RVF Cognitive Containers](ruvector/rvf-cognitive-containers.md) | `.rvf` format, COW branching, witness chains, CLI                                       |
+| [SONA Engine](ruvector/sona-engine.md)                           | Self-learning, Micro-LoRA, EWC++, trajectory recording                                  |
+| [Attention Mechanisms](ruvector/attention-mechanisms.md)         | 46 attention types, GNN integration patterns                                            |
+| [Ecosystem Packages](ruvector/ecosystem-packages.md)             | All 49+ npm packages — installation matrix                                              |
+| [Use Cases](ruvector/use-cases.md)                               | RAG, agent memory, semantic search, swarms — with TypeScript code                       |
+| [Performance & Security](ruvector/performance-security.md)       | Benchmarks, SIMD, quantization, post-quantum crypto                                     |
+| [PostgreSQL Extension](ruvector/postgresql-extension.md)         | Drop-in pgvector replacement, 290+ SQL functions                                        |
+| [Deployment](ruvector/deployment.md)                             | Node.js, Browser, Edge, Docker, self-booting `.rvf`                                     |
+| [MCP Integration](ruvector/mcp-integration.md)                   | Model Context Protocol server for AI agents                                             |
+| [Troubleshooting](ruvector/troubleshooting.md)                   | Diagnostic matrix, HNSW tuning, performance fixes                                       |
 
 ## What Makes RuVector Different
 
-| Capability | Traditional Vector DB | RuVector |
-|------------|----------------------|----------|
-| Learning | Static — never improves | SONA adapts in <1ms per request |
-| Deployment | Servers + dependencies | Single `.rvf` file — boots in 125ms |
-| Versioning | None | Git-like COW branching |
-| Security | Basic auth | Post-quantum crypto + witness chains |
-| Local inference | External API required | Built-in via ruvllm (GGUF, LoRA) |
-| Hallucination detection | Manual guardrails | Sheaf Laplacian coherence engine |
-| Graph queries | Separate graph DB required | Cypher + SPARQL built in |
-| PostgreSQL | pgvector-compatible | Drop-in replacement (290+ SQL functions) |
-| Distributed sync | Manual + etcd | Raft consensus + CRDT delta sync |
+| Capability              | Traditional Vector DB      | RuVector                                 |
+| ----------------------- | -------------------------- | ---------------------------------------- |
+| Learning                | Static — never improves    | SONA adapts in <1ms per request          |
+| Deployment              | Servers + dependencies     | Single `.rvf` file — boots in 125ms      |
+| Versioning              | None                       | Git-like COW branching                   |
+| Security                | Basic auth                 | Post-quantum crypto + witness chains     |
+| Local inference         | External API required      | Built-in via ruvllm (GGUF, LoRA)         |
+| Hallucination detection | Manual guardrails          | Sheaf Laplacian coherence engine         |
+| Graph queries           | Separate graph DB required | Cypher + SPARQL built in                 |
+| PostgreSQL              | pgvector-compatible        | Drop-in replacement (290+ SQL functions) |
+| Distributed sync        | Manual + etcd              | Raft consensus + CRDT delta sync         |
 
 ## Key Concepts
 
@@ -116,11 +117,11 @@ into any coding assistant. The SKILL is defined once canonically and referenced 
 
 **IDE / CLI integrations** (all reference the canonical source above):
 
-| Environment | Reference File |
-|-------------|----------------|
-| GitHub Copilot | `.github/skills/bmad-ruvector-prime/SKILL.md` |
-| OpenCode | `.opencode/skills/bmad-ruvector-prime/SKILL.md` |
-| Generic agents / CLI | `.agent/skills/bmad-ruvector-prime/SKILL.md` |
+| Environment          | Reference File                                  |
+| -------------------- | ----------------------------------------------- |
+| GitHub Copilot       | `.github/skills/bmad-ruvector-prime/SKILL.md`   |
+| OpenCode             | `.opencode/skills/bmad-ruvector-prime/SKILL.md` |
+| Generic agents / CLI | `.agent/skills/bmad-ruvector-prime/SKILL.md`    |
 
 Any update to `skill-ruvector-prime.md` is automatically reflected in all three environments,
 as the reference files contain only a directive to load the canonical path.
