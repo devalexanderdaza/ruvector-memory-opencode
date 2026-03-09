@@ -7,6 +7,7 @@
 !package.json
 !README.md
 !BUILD.md
+!LICENSE
 
 # Exclude lockfile from published package
 package-lock.json

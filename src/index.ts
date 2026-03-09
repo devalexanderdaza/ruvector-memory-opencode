@@ -1,4 +1,4 @@
-export { activatePlugin, deactivatePlugin } from "./core/index.js";
+export { activatePlugin, deactivatePlugin, getPluginState } from "./core/index.js";
 export type {
   ActivationResult,
   LoggerLike,

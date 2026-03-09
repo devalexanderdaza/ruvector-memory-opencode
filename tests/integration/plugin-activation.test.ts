@@ -27,6 +27,20 @@ describe("plugin activation integration", () => {
     expect(config.db_path).toBe(".opencode/ruvector-memory.db");
   });
 
+  it("activates within performance SLA (<1 second)", async () => {
+    mkdirSync(TMP_ROOT, { recursive: true });
+
+    const start = performance.now();
+    const result = await activatePlugin({
+      projectRoot: TMP_ROOT,
+      runtimeNodeVersion: "22.11.0",
+    });
+    const duration = performance.now() - start;
+
+    expect(result.success).toBe(true);
+    expect(duration).toBeLessThan(1000); // NFR3: <1 second initialization
+  });
+
   it("loads explicit file config and applies it", () => {
     const configDir = join(TMP_ROOT, ".opencode");
     mkdirSync(configDir, { recursive: true });

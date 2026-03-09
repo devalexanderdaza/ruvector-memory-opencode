@@ -27,6 +27,16 @@ npm install
 - `npm run typecheck`: Run strict TypeScript checks
 - `npm run prepack`: Validate lint, types, tests, and build before publish
 
+## OpenCode Plugin Integration
+
+This plugin auto-registers with OpenCode via the plugin manifest pattern:
+
+- **Entry point**: `src/plugin-manifest.ts` exports a plugin descriptor with `name`, `activate`, and `deactivate` methods.
+- **Activation**: OpenCode discovers the plugin through package.json `main` field and calls `activate()` automatically on agent session start.
+- **No manual setup**: Users don't need to import or configure anything - installation via npm is sufficient.
+
+For plugin lifecycle hooks, see `src/core/plugin.ts` (activation) and `src/core/lifecycle.ts` (deactivation).
+
 ## Zero-Configuration Defaults
 
 If `.opencode/ruvector_memory_config.yaml` does not exist, plugin defaults are used:

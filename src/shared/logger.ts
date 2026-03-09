@@ -45,6 +45,8 @@ class StructuredLogger implements LoggerLike {
     };
 
     // Console output is centralized here to avoid ad-hoc logging in code paths.
+    // Note: console.warn() and console.error() write to stderr, while console.log/debug write to stdout.
+    // This ensures errors and warnings are properly captured by monitoring tools.
     console[level](JSON.stringify(payload));
   }
 }

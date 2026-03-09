@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { activatePlugin } from "../../../src/core/plugin.js";
+import { activatePlugin, getPluginState } from "../../../src/core/plugin.js";
 
 describe("activatePlugin", () => {
   it("activates successfully with Node.js >=22", async () => {
@@ -25,7 +25,8 @@ describe("activatePlugin", () => {
   });
 
   it("returns graceful activation error when config validation fails", async () => {
-    process.env.RUVECTOR_MEMORY_LOG_LEVEL = "invalid-level";
+    // Use negative cache_size to trigger Zod validation failure
+    process.env.RUVECTOR_MEMORY_CACHE_SIZE = "-100";
 
     const result = await activatePlugin({ runtimeNodeVersion: "22.1.0" });
 
@@ -35,6 +36,11 @@ describe("activatePlugin", () => {
       expect(result.reason).toBe("activation");
     }
 
-    process.env.RUVECTOR_MEMORY_LOG_LEVEL = undefined;
+    process.env.RUVECTOR_MEMORY_CACHE_SIZE = undefined;
+  });
+
+  it("returns initial degraded state as false", () => {
+    const state = getPluginState();
+    expect(state.degraded).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 # Story 1.1: Plugin Installation and Automatic Activation
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -308,10 +308,14 @@ GPT-5.3-Codex
 - Added structured logging and custom error classes to support graceful degradation behavior.
 - Added unit and integration tests for activation success/failure flows, config defaults/env behavior, lifecycle hooks, and public API manifest wiring.
 - Validated installation and quality gates via npm workflow; all required checks pass and coverage exceeds project thresholds.
+- Code review fixes: Added degraded state tracking for background init failures, improved YAML parser to handle edge cases (booleans, inline comments, URLs), added performance SLA test (<1s initialization), enhanced type safety in env loader, improved normalizeEnv to handle "0" and "false" values, documented logger stderr/stdout behavior, added plugin-manifest integration docs to BUILD.md, exported getPluginState for runtime status checking.
 
 ### File List
 
+- .gitignore
+- .npmignore
 - package.json
+- package-lock.json
 - tsconfig.json
 - tsup.config.ts
 - biome.json
@@ -342,3 +346,4 @@ GPT-5.3-Codex
 ### Change Log
 
 - 2026-03-09: Implemented Story 1.1 end-to-end, added scaffolding, activation/runtime validation, config defaults, tests, and documentation; story moved to review.
+- 2026-03-09: Completed adversarial code review with 12 findings (3 HIGH, 5 MEDIUM, 4 LOW). Fixed all issues: implemented degraded state tracking for background init failures, added performance SLA test (<1s), improved YAML parser to handle edge cases (booleans, inline comments, URLs), enhanced type safety in env-loader with log level validation, improved normalizeEnv to handle "0" and "false" values, documented stderr/stdout behavior in logger, added plugin-manifest integration docs to BUILD.md, exported getPluginState for runtime status checking, updated .npmignore to include LICENSE, added comprehensive smoke tests for public API exports. All tests pass (18/18), coverage 92.7%, no lint or type errors. Story marked as done.

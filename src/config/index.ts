@@ -9,20 +9,38 @@ import { loadEnvConfig } from "./env-loader.js";
 function parseSimpleYaml(content: string): Partial<RuVectorMemoryConfig> {
   const parsed: Record<string, unknown> = {};
   for (const rawLine of content.split("\n")) {
-    const line = rawLine.trim();
+    // Remove inline comments but preserve URLs and other colon-containing values
+    const commentIndex = rawLine.indexOf("#");
+    const lineWithoutComment = commentIndex > 0 ? rawLine.slice(0, commentIndex) : rawLine;
+    const line = lineWithoutComment.trim();
+
     if (!line || line.startsWith("#")) {
       continue;
     }
-    const [key, ...rest] = line.split(":");
-    const value = rest.join(":").trim();
-    if (!key || value.length === 0) {
+
+    const colonIndex = line.indexOf(":");
+    if (colonIndex === -1) {
       continue;
     }
 
-    if (/^-?\d+$/.test(value)) {
-      parsed[key] = Number.parseInt(value, 10);
-    } else {
-      parsed[key] = value.replace(/^['\"]|['\"]$/g, "");
+    const key = line.slice(0, colonIndex).trim();
+    const rawValue = line.slice(colonIndex + 1).trim();
+
+    if (!key || rawValue.length === 0) {
+      continue;
+    }
+
+    // Parse booleans
+    if (rawValue === "true" || rawValue === "false") {
+      parsed[key] = rawValue === "true";
+    }
+    // Parse integers
+    else if (/^-?\d+$/.test(rawValue)) {
+      parsed[key] = Number.parseInt(rawValue, 10);
+    }
+    // Parse strings (remove quotes if present)
+    else {
+      parsed[key] = rawValue.replace(/^['"]|['"]$/g, "");
     }
   }
   return parsed as Partial<RuVectorMemoryConfig>;

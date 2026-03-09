@@ -4,6 +4,10 @@ import { logger } from "../shared/logger.js";
 import type { ActivationResult, PluginActivationContext, ToolResponse } from "../shared/types.js";
 import { validateNodeVersion } from "../shared/utils.js";
 
+// Global degraded state tracking for background init failures
+let isDegraded = false;
+
+// Placeholder implementations - will be implemented in Story 1.2 (RuVector Integration)
 async function initializeVectorStore(): Promise<void> {
   return Promise.resolve();
 }
@@ -33,9 +37,14 @@ export async function activatePlugin(
     const config = loadConfig(context.projectRoot, context.configPath);
     logger.configure(config.log_level);
 
+    // Background initialization - failures set degraded mode but don't block activation
     Promise.all([initializeVectorStore(), detectProjectContext(), preloadTopMemories()]).catch(
       (error: unknown) => {
-        logger.warn("plugin_background_init_failed", { error: toErrorMessage(error) });
+        isDegraded = true;
+        logger.warn("plugin_background_init_failed", {
+          error: toErrorMessage(error),
+          degraded: true,
+        });
       },
     );
 
@@ -48,7 +57,7 @@ export async function activatePlugin(
       success: true,
       data: {
         activated: true,
-        degraded: false,
+        degraded: isDegraded,
         message: "Plugin activated",
       },
     };
@@ -63,4 +72,8 @@ export async function activatePlugin(
     const wrapped = new RuVectorMemoryError(message);
     return { success: false, error: wrapped.message, code: wrapped.code, reason: "activation" };
   }
+}
+
+export function getPluginState(): { degraded: boolean } {
+  return { degraded: isDegraded };
 }
