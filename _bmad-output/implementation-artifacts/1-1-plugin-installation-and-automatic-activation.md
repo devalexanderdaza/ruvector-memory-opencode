@@ -1,6 +1,6 @@
 # Story 1.1: Plugin Installation and Automatic Activation
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -24,51 +24,51 @@ so that I can use memory without manual bootstrap steps.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Project initialization and package structure (AC: All)
-  - [ ] 1.1: Create package.json with correct metadata and dependencies
-  - [ ] 1.2: Configure tsup for bundling with DTS generation
-  - [ ] 1.3: Configure Biome for linting/formatting
-  - [ ] 1.4: Configure Vitest for testing framework
-  - [ ] 1.5: Set up TypeScript configuration (strict mode)
-  - [ ] 1.6: Create initial directory structure following architecture
+- [x] Task 1: Project initialization and package structure (AC: All)
+  - [x] 1.1: Create package.json with correct metadata and dependencies
+  - [x] 1.2: Configure tsup for bundling with DTS generation
+  - [x] 1.3: Configure Biome for linting/formatting
+  - [x] 1.4: Configure Vitest for testing framework
+  - [x] 1.5: Set up TypeScript configuration (strict mode)
+  - [x] 1.6: Create initial directory structure following architecture
   
-- [ ] Task 2: Plugin entry point and activation mechanism (AC: 1, 2, 3)
-  - [ ] 2.1: Create src/index.ts as package public entry point
-  - [ ] 2.2: Create src/core/plugin.ts with activatePlugin() function
-  - [ ] 2.3: Implement OpenCode plugin lifecycle hooks
-  - [ ] 2.4: Create src/core/lifecycle.ts for deactivation logic
-  - [ ] 2.5: Export public API from src/core/index.ts
+- [x] Task 2: Plugin entry point and activation mechanism (AC: 1, 2, 3)
+  - [x] 2.1: Create src/index.ts as package public entry point
+  - [x] 2.2: Create src/core/plugin.ts with activatePlugin() function
+  - [x] 2.3: Implement OpenCode plugin lifecycle hooks
+  - [x] 2.4: Create src/core/lifecycle.ts for deactivation logic
+  - [x] 2.5: Export public API from src/core/index.ts
   
-- [ ] Task 3: Node.js version validation (AC: 4)
-  - [ ] 3.1: Add engines field to package.json requiring Node.js >=22
-  - [ ] 3.2: Implement runtime version check in plugin activation
-  - [ ] 3.3: Create clear error messages for incompatible Node.js versions
-  - [ ] 3.4: Test with Node.js versions <22, =22, >22
+- [x] Task 3: Node.js version validation (AC: 4)
+  - [x] 3.1: Add engines field to package.json requiring Node.js >=22
+  - [x] 3.2: Implement runtime version check in plugin activation
+  - [x] 3.3: Create clear error messages for incompatible Node.js versions
+  - [x] 3.4: Test with Node.js versions <22, =22, >22
   
-- [ ] Task 4: Zero-configuration defaults (AC: 2, 3)
-  - [ ] 4.1: Create src/config/defaults.ts with sensible default values
-  - [ ] 4.2: Create src/config/config-schema.ts with Zod validation
-  - [ ] 4.3: Implement automatic config loading with fallback to defaults
-  - [ ] 4.4: Document default values in BUILD.md
+- [x] Task 4: Zero-configuration defaults (AC: 2, 3)
+  - [x] 4.1: Create src/config/defaults.ts with sensible default values
+  - [x] 4.2: Create src/config/config-schema.ts with Zod validation
+  - [x] 4.3: Implement automatic config loading with fallback to defaults
+  - [x] 4.4: Document default values in BUILD.md
   
-- [ ] Task 5: Error handling and logging infrastructure (AC: 4)
-  - [ ] 5.1: Create src/shared/errors.ts with custom error classes
-  - [ ] 5.2: Create src/shared/logger.ts with structured logging
-  - [ ] 5.3: Implement graceful degradation strategy
-  - [ ] 5.4: Create actionable error messages for common failures
+- [x] Task 5: Error handling and logging infrastructure (AC: 4)
+  - [x] 5.1: Create src/shared/errors.ts with custom error classes
+  - [x] 5.2: Create src/shared/logger.ts with structured logging
+  - [x] 5.3: Implement graceful degradation strategy
+  - [x] 5.4: Create actionable error messages for common failures
   
-- [ ] Task 6: Integration tests and validation (AC: All)
-  - [ ] 6.1: Create tests/integration/plugin-activation.test.ts
-  - [ ] 6.2: Test successful activation with Node.js >=22
-  - [ ] 6.3: Test graceful error with Node.js <22
-  - [ ] 6.4: Test zero-config installation and activation
-  - [ ] 6.5: Validate package can be installed via npm
+- [x] Task 6: Integration tests and validation (AC: All)
+  - [x] 6.1: Create tests/integration/plugin-activation.test.ts
+  - [x] 6.2: Test successful activation with Node.js >=22
+  - [x] 6.3: Test graceful error with Node.js <22
+  - [x] 6.4: Test zero-config installation and activation
+  - [x] 6.5: Validate package can be installed via npm
   
-- [ ] Task 7: Documentation and build setup (AC: All)
-  - [ ] 7.1: Create BUILD.md with installation instructions
-  - [ ] 7.2: Create README.md with getting started guide
-  - [ ] 7.3: Document npm scripts in package.json (build, test, lint)
-  - [ ] 7.4: Add npm prepack script for validation before publish
+- [x] Task 7: Documentation and build setup (AC: All)
+  - [x] 7.1: Create BUILD.md with installation instructions
+  - [x] 7.2: Create README.md with getting started guide
+  - [x] 7.3: Document npm scripts in package.json (build, test, lint)
+  - [x] 7.4: Add npm prepack script for validation before publish
 
 ## Dev Notes
 
@@ -289,16 +289,56 @@ This story is complete when:
 
 ### Agent Model Used
 
-_To be filled by dev agent during implementation_
+GPT-5.3-Codex
 
 ### Debug Log References
 
-_To be filled by dev agent during implementation_
+- `npm install`
+- `npm run test`
+- `npm run lint`
+- `npm run typecheck`
+- `npm run build`
+- `npm pack --dry-run --json`
 
 ### Completion Notes List
 
-_To be filled by dev agent during implementation_
+- Implemented package scaffolding with strict TypeScript, tsup bundling, Biome linting/formatting, and Vitest configuration.
+- Implemented plugin activation entry point and lifecycle hooks with runtime Node.js >=22 validation and actionable error handling.
+- Added zero-config loading pipeline with defaults, env overlay, optional YAML config, and Zod schema validation.
+- Added structured logging and custom error classes to support graceful degradation behavior.
+- Added unit and integration tests for activation success/failure flows, config defaults/env behavior, lifecycle hooks, and public API manifest wiring.
+- Validated installation and quality gates via npm workflow; all required checks pass and coverage exceeds project thresholds.
 
 ### File List
 
-_To be filled by dev agent during implementation_
+- package.json
+- tsconfig.json
+- tsup.config.ts
+- biome.json
+- vitest.config.ts
+- BUILD.md
+- README.md
+- src/index.ts
+- src/plugin-manifest.ts
+- src/core/index.ts
+- src/core/plugin.ts
+- src/core/lifecycle.ts
+- src/config/index.ts
+- src/config/defaults.ts
+- src/config/config-schema.ts
+- src/config/env-loader.ts
+- src/shared/types.ts
+- src/shared/errors.ts
+- src/shared/logger.ts
+- src/shared/utils.ts
+- tests/unit/core/plugin.test.ts
+- tests/unit/core/lifecycle.test.ts
+- tests/unit/config/defaults.test.ts
+- tests/unit/config/env-loader.test.ts
+- tests/unit/public-api.test.ts
+- tests/unit/shared/logger.test.ts
+- tests/integration/plugin-activation.test.ts
+
+### Change Log
+
+- 2026-03-09: Implemented Story 1.1 end-to-end, added scaffolding, activation/runtime validation, config defaults, tests, and documentation; story moved to review.

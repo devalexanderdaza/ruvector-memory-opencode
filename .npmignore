@@ -1,0 +1,12 @@
+# Exclude everything by default
+*
+
+# Include publishable package artifacts
+!dist/
+!dist/**
+!package.json
+!README.md
+!BUILD.md
+
+# Exclude lockfile from published package
+package-lock.json
