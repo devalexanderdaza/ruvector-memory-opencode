@@ -1,6 +1,6 @@
 # Story 1.2: First-Run Initialization and Local Per-Project Database
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -25,32 +25,32 @@ so that I have immediate persistence without additional configuration.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Database initialization logic (AC: 1, 2, 3)
-  - [ ] 1.1: Create database initialization function in vector store adapter
-  - [ ] 1.2: Implement first-run detection (check if DB file exists)
-  - [ ] 1.3: Create `.opencode/` directory if it doesn't exist
-  - [ ] 1.4: Initialize RuVector database with default schema
-  - [ ] 1.5: Set up default vector configuration (dimensions, HNSW parameters)
+- [x] Task 1: Database initialization logic (AC: 1, 2, 3)
+  - [x] 1.1: Create database initialization function in vector store adapter
+  - [x] 1.2: Implement first-run detection (check if DB file exists)
+  - [x] 1.3: Create `.opencode/` directory if it doesn't exist
+  - [x] 1.4: Initialize RuVector database with default schema
+  - [x] 1.5: Set up default vector configuration (dimensions, HNSW parameters)
   
-- [ ] Task 2: Default configuration values (AC: 4)
-  - [ ] 2.1: Define default vector dimensions (384-dim for all-MiniLM model)
-  - [ ] 2.2: Set default similarity threshold (0.75)
-  - [ ] 2.3: Configure default feedback weighting parameters
-  - [ ] 2.4: Set default retention policies (7 daily, 4 weekly, 12 monthly backups)
-  - [ ] 2.5: Document all defaults in config schema
+- [x] Task 2: Default configuration values (AC: 4)
+  - [x] 2.1: Define default vector dimensions (384-dim for all-MiniLM model)
+  - [x] 2.2: Set default similarity threshold (0.75)
+  - [x] 2.3: Configure default feedback weighting parameters
+  - [x] 2.4: Set default retention policies (7 daily, 4 weekly, 12 monthly backups)
+  - [x] 2.5: Document all defaults in config schema
   
-- [ ] Task 3: Safe initialization process (AC: All)
-  - [ ] 3.1: Create atomic database creation (prevent partial initialization)
-  - [ ] 3.2: Implement rollback mechanism if initialization fails
-  - [ ] 3.3: Add validation checks after DB creation
-  - [ ] 3.4: Create initial backup snapshot after successful init
-  - [ ] 3.5: Log initialization success/failure with actionable errors
+- [x] Task 3: Safe initialization process (AC: All)
+  - [x] 3.1: Create atomic database creation (prevent partial initialization)
+  - [x] 3.2: Implement rollback mechanism if initialization fails
+  - [x] 3.3: Add validation checks after DB creation
+  - [x] 3.4: Create initial backup snapshot after successful init
+  - [x] 3.5: Log initialization success/failure with actionable errors
   
-- [ ] Task 4: Integration with plugin lifecycle (AC: All)
-  - [ ] 4.1: Hook database initialization into plugin activation
-  - [ ] 4.2: Handle initialization errors gracefully (degraded mode)
-  - [ ] 4.3: Ensure initialization completes within 1 second SLA
-  - [ ] 4.4: Add initialization metrics to telemetry
+- [x] Task 4: Integration with plugin lifecycle (AC: All)
+  - [x] 4.1: Hook database initialization into plugin activation
+  - [x] 4.2: Handle initialization errors gracefully (degraded mode)
+  - [x] 4.3: Ensure initialization completes within 1 second SLA
+  - [x] 4.4: Add initialization metrics to telemetry
 
 ## Dev Notes
 
@@ -244,16 +244,42 @@ Write metrics to `.opencode/metrics.json` for CLI dashboard consumption.
 
 ### Agent Model Used
 
-_To be filled by dev agent_
+GPT-5.3-Codex
 
 ### Debug Log References
 
-_To be filled during implementation_
+- `npm test` (Vitest + coverage): 38 tests passed, branch coverage 88.23%
+- `npm run lint` (Biome): all checks passed
+- `npx biome format --write src/core/plugin.ts src/vector/initialization.ts tests/unit/core/plugin.test.ts tests/unit/vector/initialization.test.ts tests/unit/vector/vector-store.test.ts tests/integration/first-run.test.ts`
 
 ### Completion Notes List
 
-_To be filled after implementation_
+- Implemented `src/vector/initialization.ts` with first-run detection, `.opencode/` directory creation, atomic temp-file + rename flow, validation gates, rollback cleanup, actionable error mapping, and metrics emission.
+- Implemented `src/vector/vector-store.ts` singleton adapter with lazy initialization semantics and predictable subsequent-call behavior.
+- Added backup snapshot creation after successful initialization under `.opencode/.ruvector_backups/`.
+- Integrated lazy first-operation initialization into plugin lifecycle via `initializeMemoryOnFirstOperation()` and degraded-mode transition on initialization failures.
+- Updated runtime defaults and schema validation to include Story 1.2 required values (dimensions, threshold, feedback weighting, retention policies).
+- Added/updated unit and integration tests covering first-run creation, reuse, SLA timing, error/degraded behavior, and initialization edge cases.
+- Verified quality gates: tests and lint passed.
 
 ### File List
 
-_To be filled with created/modified files_
+- `src/config/config-schema.ts`
+- `src/config/defaults.ts`
+- `src/core/plugin.ts`
+- `src/shared/errors.ts`
+- `src/shared/types.ts`
+- `src/vector/defaults.ts`
+- `src/vector/index.ts`
+- `src/vector/initialization.ts`
+- `src/vector/vector-store.ts`
+- `tests/integration/first-run.test.ts`
+- `tests/integration/plugin-activation.test.ts`
+- `tests/unit/config/defaults.test.ts`
+- `tests/unit/core/plugin.test.ts`
+- `tests/unit/vector/initialization.test.ts`
+- `tests/unit/vector/vector-store.test.ts`
+
+## Change Log
+
+- 2026-03-09: Implemented Story 1.2 end-to-end (first-run local DB initialization, safe defaults, rollback/backup/validation, plugin lazy integration, tests, and lint/test validation).

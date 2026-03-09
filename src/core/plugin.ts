@@ -1,11 +1,21 @@
 import { loadConfig } from "../config/index.js";
 import { NodeVersionError, RuVectorMemoryError } from "../shared/errors.js";
 import { logger } from "../shared/logger.js";
-import type { ActivationResult, PluginActivationContext, ToolResponse } from "../shared/types.js";
+import type {
+  ActivationResult,
+  InitResult,
+  PluginActivationContext,
+  RuVectorMemoryConfig,
+  ToolResponse,
+} from "../shared/types.js";
 import { validateNodeVersion } from "../shared/utils.js";
+import { type VectorStoreAdapter, createVectorStoreAdapter } from "../vector/index.js";
 
 // Global degraded state tracking for background init failures
 let isDegraded = false;
+let activeProjectRoot = process.cwd();
+let activeConfig: RuVectorMemoryConfig | null = null;
+let vectorStore: VectorStoreAdapter | null = null;
 
 // Placeholder implementations - will be implemented in Story 1.2 (RuVector Integration)
 async function initializeVectorStore(): Promise<void> {
@@ -36,6 +46,11 @@ export async function activatePlugin(
     validateNodeVersion(context.runtimeNodeVersion);
     const config = loadConfig(context.projectRoot, context.configPath);
     logger.configure(config.log_level);
+
+    activeProjectRoot = context.projectRoot ?? process.cwd();
+    activeConfig = config;
+    vectorStore = createVectorStoreAdapter(config, activeProjectRoot);
+    isDegraded = false;
 
     // Background initialization - failures set degraded mode but don't block activation
     Promise.all([initializeVectorStore(), detectProjectContext(), preloadTopMemories()]).catch(
@@ -72,6 +87,38 @@ export async function activatePlugin(
     const wrapped = new RuVectorMemoryError(message);
     return { success: false, error: wrapped.message, code: wrapped.code, reason: "activation" };
   }
+}
+
+export async function initializeMemoryOnFirstOperation(): Promise<InitResult> {
+  if (!activeConfig || !vectorStore) {
+    return {
+      success: false,
+      error: "Cannot initialize database: plugin is not activated",
+      code: "PLUGIN_NOT_ACTIVATED",
+      reason: "initialization",
+    };
+  }
+
+  const result = await vectorStore.ensureInitialized();
+  if (!result.success) {
+    isDegraded = true;
+    logger.warn("plugin_entered_degraded_mode", {
+      project_root: activeProjectRoot,
+      reason: result.error,
+    });
+  }
+
+  return result;
+}
+
+export function resetPluginStateForTests(): void {
+  isDegraded = false;
+  activeProjectRoot = process.cwd();
+  activeConfig = null;
+  if (vectorStore) {
+    vectorStore.resetForTests();
+  }
+  vectorStore = null;
 }
 
 export function getPluginState(): { degraded: boolean } {

@@ -9,6 +9,15 @@ export interface RuVectorMemoryConfig {
   cache_size: number;
   log_level: "debug" | "info" | "warn" | "error";
   preload_top_memories: number;
+  vector_dimensions: number;
+  similarity_threshold: number;
+  vector_index_type: "hnsw";
+  vector_metric: "cosine";
+  feedback_weight: number;
+  importance_decay: number;
+  backup_retention_days: number;
+  backup_retention_weeks: number;
+  backup_retention_months: number;
 }
 
 export type ToolResponse<T> =
@@ -20,6 +29,24 @@ export interface ActivationResult {
   degraded: boolean;
   message: string;
 }
+
+export interface VectorInitializationData {
+  firstRun: boolean;
+  created: boolean;
+  dbPath: string;
+  initializationMs: number;
+  databaseSize: number;
+}
+
+export interface InitMetricsPayload {
+  initializationTime: number;
+  firstOperationTime: number;
+  databaseSize: number;
+  success: boolean;
+  errorType?: string;
+}
+
+export type InitResult = ToolResponse<VectorInitializationData>;
 
 export interface LoggerLike {
   debug(event: string, metadata?: Record<string, unknown>): void;

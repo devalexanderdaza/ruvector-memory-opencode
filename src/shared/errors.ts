@@ -17,3 +17,10 @@ export class NodeVersionError extends RuVectorMemoryError {
     this.name = "NodeVersionError";
   }
 }
+
+export class InitializationError extends RuVectorMemoryError {
+  public constructor(message: string, code = "DB_INIT_FAILED") {
+    super(message, code);
+    this.name = "InitializationError";
+  }
+}

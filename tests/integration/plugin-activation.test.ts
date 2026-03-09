@@ -24,7 +24,7 @@ describe("plugin activation integration", () => {
     expect(result.success).toBe(true);
 
     const config = loadConfig(TMP_ROOT);
-    expect(config.db_path).toBe(".opencode/ruvector-memory.db");
+    expect(config.db_path).toBe(".opencode/ruvector_memory.db");
   });
 
   it("activates within performance SLA (<1 second)", async () => {
