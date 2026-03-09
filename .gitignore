@@ -16,4 +16,4 @@ coverage/
 .idea/
 
 # BMAD generated outputs and local workspace caches
-_bmad-output/
+# _bmad-output/
