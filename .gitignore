@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+coverage/
+*.tsbuildinfo
+
+# Runtime/temp
+.tmp-test-workspace/
+*.log
+
+# Editor/system
+.DS_Store
+.vscode/
+.idea/
+
+# BMAD generated outputs and local workspace caches
+_bmad-output/
