@@ -36,6 +36,20 @@ describe("Database Initialization", () => {
     expect(result.success).toBe(true);
     expect(existsSync(join(TMP_ROOT, ".opencode", "ruvector_memory.db"))).toBe(true);
     expect(existsSync(join(TMP_ROOT, ".opencode", "metrics.json"))).toBe(true);
+    expect(existsSync(join(TMP_ROOT, ".opencode", "applied-defaults.json"))).toBe(true);
+
+    const appliedDefaults = JSON.parse(
+      readFileSync(join(TMP_ROOT, ".opencode", "applied-defaults.json"), "utf8"),
+    ) as {
+      vector: { dimensions: number; similarityThreshold: number; metric: string };
+      learning: { feedbackWeight: number; importanceDecay: number };
+      backup: { retentionDays: number; retentionWeeks: number; retentionMonths: number };
+    };
+
+    expect(appliedDefaults.vector.dimensions).toBe(384);
+    expect(appliedDefaults.vector.similarityThreshold).toBe(0.75);
+    expect(appliedDefaults.learning.feedbackWeight).toBe(0.1);
+    expect(appliedDefaults.backup.retentionDays).toBe(7);
   });
 
   it("detects existing database and skips initialization", async () => {

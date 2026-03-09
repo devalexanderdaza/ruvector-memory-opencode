@@ -32,6 +32,14 @@ export class VectorStoreAdapter {
     this.initPromise = initializeDatabase({
       projectRoot: this.projectRoot,
       dbRelativePath: this.config.db_path,
+      vectorDimensions: this.config.vector_dimensions,
+      vectorMetric: this.config.vector_metric,
+      similarityThreshold: this.config.similarity_threshold,
+      feedbackWeight: this.config.feedback_weight,
+      importanceDecay: this.config.importance_decay,
+      backupRetentionDays: this.config.backup_retention_days,
+      backupRetentionWeeks: this.config.backup_retention_weeks,
+      backupRetentionMonths: this.config.backup_retention_months,
     });
 
     const result = await this.initPromise;

@@ -1,6 +1,6 @@
 # Story 1.2: First-Run Initialization and Local Per-Project Database
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -261,25 +261,21 @@ GPT-5.3-Codex
 - Updated runtime defaults and schema validation to include Story 1.2 required values (dimensions, threshold, feedback weighting, retention policies).
 - Added/updated unit and integration tests covering first-run creation, reuse, SLA timing, error/degraded behavior, and initialization edge cases.
 - Verified quality gates: tests and lint passed.
+- Code review fix: replaced placeholder bootstrap JSON flow with real `@ruvector/core` initialization path and first-write materialization.
+- Code review fix: persisted applied safe defaults in `.opencode/applied-defaults.json` (threshold, feedback, retention, dimensions) for auditable first-run behavior.
+- Code review fix: aligned `@ruvector/core` versioning to available npm releases and added local dev dependency for typecheck/test stability.
+- Code review fix: strengthened first-run integration coverage to activate through plugin entrypoint (`plugin.activate`) rather than direct-only activation calls.
 
 ### File List
 
-- `src/config/config-schema.ts`
-- `src/config/defaults.ts`
-- `src/core/plugin.ts`
-- `src/shared/errors.ts`
-- `src/shared/types.ts`
-- `src/vector/defaults.ts`
-- `src/vector/index.ts`
 - `src/vector/initialization.ts`
 - `src/vector/vector-store.ts`
+- `package.json`
+- `package-lock.json`
 - `tests/integration/first-run.test.ts`
-- `tests/integration/plugin-activation.test.ts`
-- `tests/unit/config/defaults.test.ts`
-- `tests/unit/core/plugin.test.ts`
 - `tests/unit/vector/initialization.test.ts`
-- `tests/unit/vector/vector-store.test.ts`
 
 ## Change Log
 
 - 2026-03-09: Implemented Story 1.2 end-to-end (first-run local DB initialization, safe defaults, rollback/backup/validation, plugin lazy integration, tests, and lint/test validation).
+- 2026-03-09: Applied code-review fixes: real `@ruvector/core` initialization, corrected package version strategy (`peer` + `dev`), stronger first-run integration path coverage, and defaults audit artifact.

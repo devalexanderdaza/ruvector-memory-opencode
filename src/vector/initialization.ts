@@ -3,7 +3,6 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
-  renameSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -13,19 +12,48 @@ import { dirname, join, resolve } from "node:path";
 import { logger } from "../shared/logger.js";
 import type { InitMetricsPayload, InitResult } from "../shared/types.js";
 import {
+  DEFAULT_BACKUP_RETENTION_DAYS,
+  DEFAULT_BACKUP_RETENTION_MONTHS,
+  DEFAULT_BACKUP_RETENTION_WEEKS,
+  DEFAULT_FEEDBACK_WEIGHT,
+  DEFAULT_IMPORTANCE_DECAY,
+  DEFAULT_SIMILARITY_THRESHOLD,
   DEFAULT_VECTOR_DIMENSIONS,
-  DEFAULT_VECTOR_INDEX_TYPE,
   DEFAULT_VECTOR_METRIC,
 } from "./defaults.js";
 
 interface InitializeDatabaseOptions {
   projectRoot: string;
   dbRelativePath: string;
+  vectorDimensions?: number;
+  vectorMetric?: string;
+  similarityThreshold?: number;
+  feedbackWeight?: number;
+  importanceDecay?: number;
+  backupRetentionDays?: number;
+  backupRetentionWeeks?: number;
+  backupRetentionMonths?: number;
 }
 
 interface BackupOptions {
   projectRoot: string;
   dbPath: string;
+}
+
+interface VectorDbLike {
+  insert?: (entry: {
+    id?: string;
+    vector: Float32Array | number[];
+  }) => Promise<string>;
+  delete?: (id: string) => Promise<boolean>;
+}
+
+interface VectorDbConstructor {
+  new (options: {
+    dimensions: number;
+    storagePath: string;
+    distanceMetric: string;
+  }): VectorDbLike;
 }
 
 function safeRemove(path: string): void {
@@ -69,6 +97,81 @@ function writeInitMetrics(projectRoot: string, payload: InitMetricsPayload): voi
   }
 }
 
+function writeAppliedDefaults(options: InitializeDatabaseOptions): void {
+  const defaultsPath = join(options.projectRoot, ".opencode", "applied-defaults.json");
+  const appliedDefaults = {
+    vector: {
+      dimensions: options.vectorDimensions ?? DEFAULT_VECTOR_DIMENSIONS,
+      similarityThreshold: options.similarityThreshold ?? DEFAULT_SIMILARITY_THRESHOLD,
+      metric: options.vectorMetric ?? DEFAULT_VECTOR_METRIC,
+    },
+    learning: {
+      feedbackWeight: options.feedbackWeight ?? DEFAULT_FEEDBACK_WEIGHT,
+      importanceDecay: options.importanceDecay ?? DEFAULT_IMPORTANCE_DECAY,
+    },
+    backup: {
+      retentionDays: options.backupRetentionDays ?? DEFAULT_BACKUP_RETENTION_DAYS,
+      retentionWeeks: options.backupRetentionWeeks ?? DEFAULT_BACKUP_RETENTION_WEEKS,
+      retentionMonths: options.backupRetentionMonths ?? DEFAULT_BACKUP_RETENTION_MONTHS,
+    },
+    createdAt: new Date().toISOString(),
+  };
+
+  writeFileSync(defaultsPath, JSON.stringify(appliedDefaults, null, 2), "utf8");
+}
+
+async function initializeRuVectorDb(
+  options: InitializeDatabaseOptions,
+  dbPath: string,
+): Promise<void> {
+  const configuredMetric = options.vectorMetric ?? DEFAULT_VECTOR_METRIC;
+  const coreDistanceMetric = configuredMetric === "cosine" ? "Cosine" : configuredMetric;
+
+  const module = (await import("@ruvector/core")) as Partial<{ VectorDb: VectorDbConstructor }>;
+  const VectorDb = module.VectorDb;
+
+  if (typeof VectorDb !== "function") {
+    throw new Error("@ruvector/core does not export a usable VectorDb constructor");
+  }
+
+  const db = new VectorDb({
+    dimensions: options.vectorDimensions ?? DEFAULT_VECTOR_DIMENSIONS,
+    storagePath: dbPath,
+    distanceMetric: coreDistanceMetric,
+  });
+
+  // Force first-write so persistent storage is materialized on first run.
+  if (typeof db.insert === "function") {
+    const bootstrapId = `bootstrap-${Date.now()}`;
+    const vector = new Float32Array(options.vectorDimensions ?? DEFAULT_VECTOR_DIMENSIONS);
+
+    await db.insert({
+      id: bootstrapId,
+      vector,
+    });
+
+    if (typeof db.delete === "function") {
+      await db.delete(bootstrapId);
+    }
+  }
+
+  if (!existsSync(dbPath)) {
+    writeFileSync(
+      dbPath,
+      JSON.stringify(
+        {
+          engine: "@ruvector/core",
+          createdAt: new Date().toISOString(),
+          note: "Database initialized via VectorDb; storage internals are managed by the library.",
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+  }
+}
+
 export function validateDatabaseFile(dbPath: string): boolean {
   if (!existsSync(dbPath)) {
     return false;
@@ -93,7 +196,6 @@ export async function initializeDatabase(options: InitializeDatabaseOptions): Pr
   const startedAt = performance.now();
   const dbPath = resolve(options.projectRoot, options.dbRelativePath);
   const dbDir = dirname(dbPath);
-  const tempPath = `${dbPath}.tmp`;
 
   logger.info("database_initialization_started", {
     db_path: dbPath,
@@ -124,31 +226,18 @@ export async function initializeDatabase(options: InitializeDatabaseOptions): Pr
       };
     }
 
-    safeRemove(tempPath);
-
-    const bootstrapPayload = {
-      format: "ruvector-local",
-      schemaVersion: 1,
-      vector: {
-        dimensions: DEFAULT_VECTOR_DIMENSIONS,
-        indexType: DEFAULT_VECTOR_INDEX_TYPE,
-        metric: DEFAULT_VECTOR_METRIC,
-      },
-      createdAt: new Date().toISOString(),
-    };
-
-    writeFileSync(tempPath, JSON.stringify(bootstrapPayload), "utf8");
-    chmodSync(tempPath, 0o600);
-
-    if (!validateDatabaseFile(tempPath)) {
-      throw new Error("temporary database validation failed");
+    if (existsSync(dbPath)) {
+      safeRemove(dbPath);
     }
 
-    renameSync(tempPath, dbPath);
+    await initializeRuVectorDb(options, dbPath);
+    chmodSync(dbPath, 0o600);
 
     if (!validateDatabaseFile(dbPath)) {
       throw new Error("database validation failed after creation");
     }
+
+    writeAppliedDefaults(options);
 
     const backupPath = await createInitialBackupSnapshot({
       projectRoot: options.projectRoot,
@@ -182,7 +271,7 @@ export async function initializeDatabase(options: InitializeDatabaseOptions): Pr
       },
     };
   } catch (error) {
-    safeRemove(tempPath);
+    safeRemove(dbPath);
 
     const elapsed = Math.round(performance.now() - startedAt);
     const message = toActionableInitErrorMessage(error);

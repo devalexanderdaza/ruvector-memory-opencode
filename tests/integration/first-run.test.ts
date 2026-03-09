@@ -4,10 +4,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-  activatePlugin,
   initializeMemoryOnFirstOperation,
   resetPluginStateForTests,
 } from "../../src/core/plugin.js";
+import { plugin } from "../../src/plugin-manifest.js";
 
 const TMP_ROOT = join(process.cwd(), ".tmp-first-run-tests");
 
@@ -18,7 +18,7 @@ afterEach(() => {
 
 describe("First-Run Experience", () => {
   it("creates database on first memory operation", async () => {
-    const activation = await activatePlugin({
+    const activation = await plugin.activate({
       projectRoot: TMP_ROOT,
       runtimeNodeVersion: "22.11.0",
     });
@@ -31,7 +31,7 @@ describe("First-Run Experience", () => {
   });
 
   it("reuses existing database on subsequent operations", async () => {
-    const activation = await activatePlugin({
+    const activation = await plugin.activate({
       projectRoot: TMP_ROOT,
       runtimeNodeVersion: "22.11.0",
     });
@@ -49,7 +49,7 @@ describe("First-Run Experience", () => {
   });
 
   it("initialization completes within 1 second", async () => {
-    const activation = await activatePlugin({
+    const activation = await plugin.activate({
       projectRoot: TMP_ROOT,
       runtimeNodeVersion: "22.11.0",
     });
