@@ -2,6 +2,7 @@ import { loadConfig } from "../config/index.js";
 import { detectProjectRoot } from "../detection/project-detector.js";
 import { NodeVersionError, RuVectorMemoryError } from "../shared/errors.js";
 import { logger } from "../shared/logger.js";
+import { injectTools } from "../tools/index.js";
 import type {
   ActivationResult,
   InitResult,
@@ -61,6 +62,9 @@ export async function activatePlugin(
     activeConfig = config;
     vectorStore = createVectorStoreAdapter(config, activeProjectRoot);
     isDegraded = false;
+
+    // Register OpenCode tools synchronously (stubs allowed); never blocks activation.
+    injectTools(context);
 
     // Background initialization - failures set degraded mode but don't block activation
     Promise.all([
@@ -145,4 +149,8 @@ export function resetPluginStateForTests(): void {
 
 export function getPluginState(): { degraded: boolean } {
   return { degraded: isDegraded };
+}
+
+export function getVectorStoreAdapterForTools(): VectorStoreAdapter | null {
+  return vectorStore;
 }

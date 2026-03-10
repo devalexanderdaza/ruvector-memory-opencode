@@ -2,6 +2,7 @@ export interface PluginActivationContext {
   projectRoot?: string;
   configPath?: string;
   runtimeNodeVersion?: string;
+  toolRegistry?: unknown;
 }
 
 export interface RuVectorMemoryConfig {
@@ -47,6 +48,21 @@ export interface InitMetricsPayload {
 }
 
 export type InitResult = ToolResponse<VectorInitializationData>;
+
+export interface MemorySaveResult {
+  id: string;
+}
+
+export interface MemorySearchItem {
+  id: string;
+  score: number;
+  content?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface MemorySearchResult {
+  items: MemorySearchItem[];
+}
 
 export interface LoggerLike {
   debug(event: string, metadata?: Record<string, unknown>): void;
