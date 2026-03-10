@@ -1,6 +1,6 @@
 ---
 name: bmad-quick-dev-new-preview
-description: Unified quick flow - clarify intent, plan, implement, review, present.
+description: 'Implements any user intent, requirement, story, bug fix or change request by producing clean working code artifacts that follow the projects existing architecture, patterns and conventions. Use when the user wants to build, fix, tweak, refactor, add or modify any code, component or feature.'
 ---
 
-IT IS CRITICAL THAT YOU FOLLOW THIS COMMAND: LOAD the FULL workflow.md, READ its entire contents and follow its directions exactly!
+Follow the instructions in [workflow.md](workflow.md).
