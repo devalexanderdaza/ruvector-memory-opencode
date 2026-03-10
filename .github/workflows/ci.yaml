@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    name: Node ${{ matrix.node }} • ${{ matrix.pm }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22.x"]
+        pm: ["npm", "pnpm", "yarn"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Enable Corepack (pnpm/yarn)
+        if: ${{ matrix.pm != 'npm' }}
+        run: corepack enable
+
+      - name: Install dependencies (npm)
+        if: ${{ matrix.pm == 'npm' }}
+        run: npm install
+
+      - name: Install dependencies (pnpm)
+        if: ${{ matrix.pm == 'pnpm' }}
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Install dependencies (yarn)
+        if: ${{ matrix.pm == 'yarn' }}
+        run: yarn install --no-immutable
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build

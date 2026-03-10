@@ -8,6 +8,20 @@ Local-first memory plugin for OpenCode with automatic activation and Node.js run
 npm install @ruvector/opencode-memory
 ```
 
+For full local vector search, also install the optional peer dependency:
+
+```bash
+npm install @ruvector/core
+```
+
+Alternative package managers:
+
+```bash
+pnpm add @ruvector/opencode-memory @ruvector/core
+# or
+yarn add @ruvector/opencode-memory @ruvector/core
+```
+
 On the next OpenCode session, the plugin can activate automatically using default settings (no manual bootstrap).
 
 ## Node.js Compatibility
