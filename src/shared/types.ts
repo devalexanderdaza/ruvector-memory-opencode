@@ -81,7 +81,52 @@ export interface MemorySearchItem {
   id: string;
   score: number;
   content?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, unknown> | string;
+}
+
+/**
+ * Represents a single memory item in enriched search results.
+ * Includes all metadata needed for agents to understand memory reliability and context.
+ *
+ * @property id - Unique memory identifier (UUID) for traceability
+ * @property content - Original captured text (max 8KB)
+ * @property relevance - Composite similarity score in range [0.0, 1.0]
+ * @property confidence - Learning signal based on usage + feedback in range [-1.0, 1.0]
+ *   - 1.0: High confidence (max usage reached, consistently positive feedback)
+ *   - 0.5: Mid-range (usage cap of 10 reached with zero feedback, or moderate usage with strong positive feedback)
+ *   - 0.0: Neutral (zero accesses and no feedback)
+ *   - <0.0: Low confidence (corrected multiple times)
+ * @property timestamp - ISO-8601 datetime when memory was created
+ * @property source - Origin of memory: "manual" (user saved), "agent" (auto-captured), or "import" (from .rvf)
+ * @property tags - Optional user-supplied classification tags
+ * @property importance - Optional importance level on 1-5 scale
+ * @property projectContext - Optional auto-detected project identifier
+ */
+export interface SearchResult {
+  id: string;
+  content: string;
+  relevance: number;
+  confidence: number;
+  timestamp: string;
+  source: "manual" | "agent" | "import";
+  tags?: string[];
+  importance?: number;
+  projectContext?: string;
+}
+
+/**
+ * Response format for memory_search() tool.
+ * Includes enriched results and performance metadata for agent insight.
+ */
+export interface MemorySearchResponse {
+  success: boolean;
+  results: SearchResult[];
+  count: number;
+  _meta?: {
+    query: string;
+    timestamp: string;
+    queryLatencyMs: number;
+  };
 }
 
 export interface MemorySearchResult {

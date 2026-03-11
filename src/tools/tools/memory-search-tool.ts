@@ -2,10 +2,11 @@ import {
   getVectorStoreAdapterForTools,
   initializeMemoryOnFirstOperation,
 } from "../../core/plugin.js";
+import { formatSearchResults } from "../memory-response-formatter.js";
 import type {
   MemorySearchFilters,
   MemorySearchInput,
-  MemorySearchResult,
+  MemorySearchResponse,
   ToolResponse,
 } from "../../shared/types.js";
 
@@ -167,10 +168,10 @@ function getSearchInputError(input?: unknown): string {
 
 export function createMemorySearchTool(): (
   input?: unknown,
-) => Promise<ToolResponse<MemorySearchResult>> {
+) => Promise<ToolResponse<MemorySearchResponse>> {
   return async function memory_search(
     input?: unknown,
-  ): Promise<ToolResponse<MemorySearchResult>> {
+  ): Promise<ToolResponse<MemorySearchResponse>> {
     const parsed = parseSearchInput(input);
     if (!parsed) {
       return {
@@ -183,7 +184,7 @@ export function createMemorySearchTool(): (
 
     const init = await initializeMemoryOnFirstOperation();
     if (!init.success) {
-      return init;
+      return init as ToolResponse<MemorySearchResponse>;
     }
 
     const store = getVectorStoreAdapterForTools();
@@ -197,7 +198,30 @@ export function createMemorySearchTool(): (
     }
 
     try {
-      return await store.search(parsed.query, parsed.limit, parsed.filters);
+      const startTime = Date.now();
+      const storeResult = await store.search(
+        parsed.query,
+        parsed.limit,
+        parsed.filters,
+      );
+
+      if (!storeResult.success) {
+        return storeResult as ToolResponse<MemorySearchResponse>;
+      }
+
+      const queryLatencyMs = Date.now() - startTime;
+
+      // Format raw results into enriched response with confidence, source, etc.
+      const enrichedResponse = formatSearchResults(
+        storeResult.data,
+        parsed.query,
+        queryLatencyMs,
+      );
+
+      return {
+        success: true,
+        data: enrichedResponse,
+      };
     } catch (error) {
       return {
         success: false,

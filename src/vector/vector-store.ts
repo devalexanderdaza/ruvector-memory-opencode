@@ -335,6 +335,15 @@ export class VectorStoreAdapter {
     return {
       success: true,
       data: {
+        /**
+         * Each item contains:
+         * - id: UUID assigned at insert time
+         * - score: composite distance (lower = more relevant); used by formatter to compute relevance
+         * - content: original text stored via memory_save()
+         * - metadata: full parsed metadata object with all fields saved by memory_save:
+         *     created_at, source, tags, priority, confidence, accessCount,
+         *     positiveFeedbackCount, negativeFeedbackCount, projectContext, importance
+         */
         items: sorted.slice(0, normalizedLimit).map((entry) => ({
           id: entry.raw.id,
           score: entry.compositeScore,

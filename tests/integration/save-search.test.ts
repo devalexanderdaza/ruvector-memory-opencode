@@ -41,12 +41,12 @@ describe("Save + Search integration", () => {
     const search = await memorySearch?.({ query: "alpha memory", limit: 2 });
     expect(search.success).toBe(true);
     if (search.success) {
-      expect(search.data.items.length).toBeGreaterThan(0);
-      expect(search.data.items[0].content).toBe("alpha memory");
-      // Composite distance still uses "lower is better" semantics.
-      if (search.data.items.length > 1) {
-        expect(search.data.items[0].score).toBeLessThanOrEqual(
-          search.data.items[1].score,
+      expect(search.data.results.length).toBeGreaterThan(0);
+      expect(search.data.results[0].content).toBe("alpha memory");
+      // Results are sorted by relevance descending in the enriched response.
+      if (search.data.results.length > 1) {
+        expect(search.data.results[0].relevance).toBeGreaterThanOrEqual(
+          search.data.results[1].relevance,
         );
       }
     }
@@ -93,11 +93,10 @@ describe("Save + Search integration", () => {
 
     expect(search.success).toBe(true);
     if (search.success) {
-      expect(search.data.items.length).toBeGreaterThan(0);
-      for (const item of search.data.items) {
-        const tags = item.metadata?.tags;
-        expect(Array.isArray(tags)).toBe(true);
-        expect(tags).toContain("backend");
+      expect(search.data.results.length).toBeGreaterThan(0);
+      for (const item of search.data.results) {
+        expect(Array.isArray(item.tags)).toBe(true);
+        expect(item.tags).toContain("backend");
       }
     }
   });
