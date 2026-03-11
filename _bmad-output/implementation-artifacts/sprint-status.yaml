@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-09
-last_updated: 2026-03-11T00:00:00Z
+last_updated: 2026-03-11T08:45:00Z
 project: ruvector-memory-opencode
 project_key: NOKEY
 tracking_system: file-system
@@ -60,7 +60,7 @@ development_status:
   2-3-search-filters-by-metadata-and-time-range: done
   2-4-enriched-response-with-source-context: done
   2-5-passive-injection-of-top-memories-into-agent-context: done
-  2-6-stack-detection-and-project-metadata-enrichment: backlog
+  2-6-stack-detection-and-project-metadata-enrichment: done
   epic-2-retrospective: optional
 
   # Epic 3: Continuous Learning with Control and Auditability
