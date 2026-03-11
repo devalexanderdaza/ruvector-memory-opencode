@@ -51,4 +51,54 @@ describe("Save + Search integration", () => {
       }
     }
   });
+
+  it("filters search results by metadata tags", async () => {
+    const registered: Record<string, (input?: unknown) => Promise<any>> = {};
+
+    const activation = await plugin.activate({
+      projectRoot: TMP_ROOT,
+      runtimeNodeVersion: "22.11.0",
+      toolRegistry: {
+        registerTool(name: string, handler: (input?: unknown) => Promise<any>) {
+          registered[name] = handler;
+        },
+      },
+    });
+
+    expect(activation.success).toBe(true);
+
+    const memorySave = registered["memory_save"];
+    const memorySearch = registered["memory_search"];
+    expect(typeof memorySave).toBe("function");
+    expect(typeof memorySearch).toBe("function");
+
+    await memorySave?.({
+      content: "memory for backend",
+      tags: ["backend"],
+      source: "docs",
+    });
+    await memorySave?.({
+      content: "memory for frontend",
+      tags: ["frontend"],
+      source: "docs",
+    });
+
+    const search = await memorySearch?.({
+      query: "memory",
+      limit: 5,
+      filters: {
+        tags: ["backend"],
+      },
+    });
+
+    expect(search.success).toBe(true);
+    if (search.success) {
+      expect(search.data.items.length).toBeGreaterThan(0);
+      for (const item of search.data.items) {
+        const tags = item.metadata?.tags;
+        expect(Array.isArray(tags)).toBe(true);
+        expect(tags).toContain("backend");
+      }
+    }
+  });
 });

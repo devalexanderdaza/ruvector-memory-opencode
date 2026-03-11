@@ -88,6 +88,19 @@ export interface MemorySearchResult {
   items: MemorySearchItem[];
 }
 
+export interface MemorySearchFilters {
+  tags?: string[];
+  source?: string;
+  created_after?: string | number;
+  created_before?: string | number;
+}
+
+export interface MemorySearchInput {
+  query: string;
+  limit?: number;
+  filters?: MemorySearchFilters;
+}
+
 export interface LoggerLike {
   debug(event: string, metadata?: Record<string, unknown>): void;
   info(event: string, metadata?: Record<string, unknown>): void;

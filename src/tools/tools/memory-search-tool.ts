@@ -2,19 +2,137 @@ import {
   getVectorStoreAdapterForTools,
   initializeMemoryOnFirstOperation,
 } from "../../core/plugin.js";
-import type { MemorySearchResult, ToolResponse } from "../../shared/types.js";
+import type {
+  MemorySearchFilters,
+  MemorySearchInput,
+  MemorySearchResult,
+  ToolResponse,
+} from "../../shared/types.js";
 
 /** Hard cap on retrieved items to prevent resource-exhaustion via large k searches. */
 const MAX_SEARCH_LIMIT = 100;
 
-function parseQueryAndLimit(
+type ParsedSearchInput = {
+  query: string;
+  limit: number;
+  filters?: MemorySearchFilters;
+};
+
+function toEpochMs(value: string | number): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseFilters(rawFilters: unknown): {
+  filters?: MemorySearchFilters;
+  error?: string;
+} {
+  if (rawFilters === undefined) {
+    return {};
+  }
+
+  if (!rawFilters || typeof rawFilters !== "object") {
+    return {
+      error:
+        "memory_search filters must be an object with optional tags, source, created_after, created_before",
+    };
+  }
+
+  const candidate = rawFilters as Record<string, unknown>;
+  const parsed: MemorySearchFilters = {};
+
+  if (candidate.tags !== undefined) {
+    if (!Array.isArray(candidate.tags)) {
+      return {
+        error: "memory_search filters.tags must be an array of non-empty strings",
+      };
+    }
+    const tags = candidate.tags
+      .filter((tag): tag is string => typeof tag === "string")
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0);
+    if (tags.length > 0) {
+      parsed.tags = tags;
+    }
+  }
+
+  if (candidate.source !== undefined) {
+    if (typeof candidate.source !== "string" || !candidate.source.trim()) {
+      return {
+        error: "memory_search filters.source must be a non-empty string",
+      };
+    }
+    parsed.source = candidate.source.trim();
+  }
+
+  if (candidate.created_after !== undefined) {
+    if (
+      typeof candidate.created_after !== "string" &&
+      typeof candidate.created_after !== "number"
+    ) {
+      return {
+        error:
+          "memory_search filters.created_after must be an ISO date string or epoch milliseconds number",
+      };
+    }
+    const epoch = toEpochMs(candidate.created_after);
+    if (epoch === null) {
+      return {
+        error:
+          "memory_search filters.created_after is invalid; use an ISO date string or epoch milliseconds number",
+      };
+    }
+    parsed.created_after = epoch;
+  }
+
+  if (candidate.created_before !== undefined) {
+    if (
+      typeof candidate.created_before !== "string" &&
+      typeof candidate.created_before !== "number"
+    ) {
+      return {
+        error:
+          "memory_search filters.created_before must be an ISO date string or epoch milliseconds number",
+      };
+    }
+    const epoch = toEpochMs(candidate.created_before);
+    if (epoch === null) {
+      return {
+        error:
+          "memory_search filters.created_before is invalid; use an ISO date string or epoch milliseconds number",
+      };
+    }
+    parsed.created_before = epoch;
+  }
+
+  if (
+    typeof parsed.created_after === "number" &&
+    typeof parsed.created_before === "number" &&
+    parsed.created_after >= parsed.created_before
+  ) {
+    return {
+      error:
+        "memory_search filters range is invalid: created_after must be less than created_before",
+    };
+  }
+
+  return {
+    filters: Object.keys(parsed).length > 0 ? parsed : undefined,
+  };
+}
+
+function parseSearchInput(
   input?: unknown,
-): { query: string; limit: number } | null {
+): ParsedSearchInput | null {
   if (typeof input === "string") {
     return { query: input, limit: 5 };
   }
   if (input && typeof input === "object") {
-    const candidate = input as Record<string, unknown>;
+    const candidate = input as Partial<MemorySearchInput> &
+      Record<string, unknown>;
     const query = typeof candidate.query === "string" ? candidate.query : null;
     const rawLimit =
       typeof candidate.limit === "number" && Number.isFinite(candidate.limit)
@@ -23,10 +141,28 @@ function parseQueryAndLimit(
     // Cap at MAX_SEARCH_LIMIT to prevent unbounded HNSW traversal.
     const limit = Math.min(Math.max(1, Math.floor(rawLimit)), MAX_SEARCH_LIMIT);
     if (query) {
-      return { query, limit };
+      const filterParse = parseFilters(candidate.filters);
+      if (filterParse.error) {
+        return null;
+      }
+      return { query, limit, filters: filterParse.filters };
     }
   }
   return null;
+}
+
+function getSearchInputError(input?: unknown): string {
+  if (typeof input !== "object" || input === null) {
+    return "memory_search requires a string query or { query: string, limit?: number, filters?: {...} }";
+  }
+
+  const candidate = input as Record<string, unknown>;
+  const filterParse = parseFilters(candidate.filters);
+  if (filterParse.error) {
+    return filterParse.error;
+  }
+
+  return "memory_search requires a string query or { query: string, limit?: number, filters?: {...} }";
 }
 
 export function createMemorySearchTool(): (
@@ -35,12 +171,11 @@ export function createMemorySearchTool(): (
   return async function memory_search(
     input?: unknown,
   ): Promise<ToolResponse<MemorySearchResult>> {
-    const parsed = parseQueryAndLimit(input);
+    const parsed = parseSearchInput(input);
     if (!parsed) {
       return {
         success: false,
-        error:
-          "memory_search requires a string query or { query: string, limit?: number }",
+        error: getSearchInputError(input),
         code: "EINVALID",
         reason: "validation",
       };
@@ -62,7 +197,7 @@ export function createMemorySearchTool(): (
     }
 
     try {
-      return await store.search(parsed.query, parsed.limit);
+      return await store.search(parsed.query, parsed.limit, parsed.filters);
     } catch (error) {
       return {
         success: false,

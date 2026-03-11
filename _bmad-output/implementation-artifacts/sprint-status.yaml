@@ -57,7 +57,7 @@ development_status:
   epic-2: in-progress
   2-1-standard-metadata-in-memory-save: done
   2-2-relevance-scoring-with-composite-signals: done
-  2-3-search-filters-by-metadata-and-time-range: ready-for-dev
+  2-3-search-filters-by-metadata-and-time-range: review
   2-4-enriched-response-with-source-context: backlog
   2-5-passive-injection-of-top-memories-into-agent-context: backlog
   2-6-stack-detection-and-project-metadata-enrichment: backlog

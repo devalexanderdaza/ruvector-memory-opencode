@@ -1,6 +1,16 @@
 import { resolve } from "node:path";
 
 import { logger } from "../shared/logger.js";
+import type {
+  InitResult,
+  MemorySearchFilters,
+  MemorySaveResult,
+  MemorySearchResult,
+  RuVectorMemoryConfig,
+  ToolResponse,
+} from "../shared/types.js";
+import { embedTextDeterministic } from "../shared/utils.js";
+import { initializeDatabase } from "./initialization.js";
 
 /**
  * Composite ranking weight constants for memory_search.
@@ -20,15 +30,7 @@ const PRIORITY_PENALTY_LOW = 0.02;
 const RECENCY_BOOST_DAY = 0.02;
 const RECENCY_BOOST_WEEK = 0.01;
 const CONFIDENCE_SCALE = 0.04;
-import type {
-  InitResult,
-  MemorySaveResult,
-  MemorySearchResult,
-  RuVectorMemoryConfig,
-  ToolResponse,
-} from "../shared/types.js";
-import { embedTextDeterministic } from "../shared/utils.js";
-import { initializeDatabase } from "./initialization.js";
+const FILTER_OVERSAMPLE_FACTOR = 5;
 
 interface VectorDbLike {
   insert: (entry: {
@@ -62,6 +64,75 @@ function parseMetadata(metadata: unknown): Record<string, unknown> | undefined {
   } catch {
     return undefined;
   }
+}
+
+function toEpochMs(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function includesAnyTag(
+  metadata: Record<string, unknown>,
+  expectedTags: string[],
+): boolean {
+  if (!Array.isArray(metadata.tags)) {
+    return false;
+  }
+
+  const tagSet = new Set(
+    metadata.tags
+      .filter((tag): tag is string => typeof tag === "string")
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0),
+  );
+  return expectedTags.some((tag) => tagSet.has(tag));
+}
+
+function matchesFilters(
+  metadata: Record<string, unknown>,
+  filters: MemorySearchFilters,
+): boolean {
+  if (filters.tags && filters.tags.length > 0) {
+    if (!includesAnyTag(metadata, filters.tags)) {
+      return false;
+    }
+  }
+
+  if (typeof filters.source === "string" && metadata.source !== filters.source) {
+    return false;
+  }
+
+  if (
+    filters.created_after !== undefined ||
+    filters.created_before !== undefined
+  ) {
+    const createdAtEpoch = toEpochMs(metadata.created_at);
+    if (createdAtEpoch === null) {
+      return false;
+    }
+
+    if (
+      typeof filters.created_after === "number" &&
+      !(createdAtEpoch > filters.created_after)
+    ) {
+      return false;
+    }
+
+    if (
+      typeof filters.created_before === "number" &&
+      !(createdAtEpoch < filters.created_before)
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 export class VectorStoreAdapter {
@@ -183,6 +254,7 @@ export class VectorStoreAdapter {
   public async search(
     query: string,
     limit = 5,
+    filters?: MemorySearchFilters,
   ): Promise<ToolResponse<MemorySearchResult>> {
     const db = await this.getDbOrNull();
     if (!db) {
@@ -194,19 +266,25 @@ export class VectorStoreAdapter {
       };
     }
 
+    const normalizedLimit = Math.max(1, Math.floor(limit));
+    const hasFilters = Boolean(filters && Object.keys(filters).length > 0);
+    const searchK = hasFilters
+      ? Math.max(
+          normalizedLimit,
+          Math.floor(normalizedLimit * FILTER_OVERSAMPLE_FACTOR),
+        )
+      : normalizedLimit;
+
     const vector = embedTextDeterministic(query, this.config.vector_dimensions);
-    const results = await db.search({ vector, k: limit });
+    const results = await db.search({ vector, k: searchK });
     const now = Date.now();
 
     const scored = results.map((r) => {
       const metadata = parseMetadata(r.metadata) ?? {};
 
-      const createdAtValue =
-        typeof metadata.created_at === "string"
-          ? Date.parse(metadata.created_at)
-          : Number.NaN;
+      const createdAtValue = toEpochMs(metadata.created_at);
       const ageMs =
-        Number.isFinite(createdAtValue) && createdAtValue >= 0
+        createdAtValue !== null && createdAtValue >= 0
           ? now - createdAtValue
           : null;
 
@@ -250,11 +328,14 @@ export class VectorStoreAdapter {
       };
     });
 
-    const sorted = scored.sort((a, b) => a.compositeScore - b.compositeScore);
+    const filtered = hasFilters
+      ? scored.filter((entry) => matchesFilters(entry.metadata, filters))
+      : scored;
+    const sorted = filtered.sort((a, b) => a.compositeScore - b.compositeScore);
     return {
       success: true,
       data: {
-        items: sorted.map((entry) => ({
+        items: sorted.slice(0, normalizedLimit).map((entry) => ({
           id: entry.raw.id,
           score: entry.compositeScore,
           content:
