@@ -49,6 +49,30 @@ export interface InitMetricsPayload {
 
 export type InitResult = ToolResponse<VectorInitializationData>;
 
+export interface MemorySaveInput {
+  content: string;
+  /**
+   * Optional tags that help classify this memory.
+   * Non‑string values are ignored at runtime.
+   */
+  tags?: string[];
+  /**
+   * Logical source of the memory (e.g. "documentation", "conversation").
+   * Defaults to "unknown" when not provided.
+   */
+  source?: string;
+  /**
+   * Importance level used for retrieval and ranking policies.
+   * Defaults to "normal" when not provided or invalid.
+   */
+  priority?: "critical" | "normal" | "low";
+  /**
+   * Optional confidence score in range [0, 1].
+   * Defaults to 0.5 when not provided or invalid.
+   */
+  confidence?: number;
+}
+
 export interface MemorySaveResult {
   id: string;
 }

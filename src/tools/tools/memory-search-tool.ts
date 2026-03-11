@@ -4,6 +4,9 @@ import {
 } from "../../core/plugin.js";
 import type { MemorySearchResult, ToolResponse } from "../../shared/types.js";
 
+/** Hard cap on retrieved items to prevent resource-exhaustion via large k searches. */
+const MAX_SEARCH_LIMIT = 100;
+
 function parseQueryAndLimit(
   input?: unknown,
 ): { query: string; limit: number } | null {
@@ -13,10 +16,12 @@ function parseQueryAndLimit(
   if (input && typeof input === "object") {
     const candidate = input as Record<string, unknown>;
     const query = typeof candidate.query === "string" ? candidate.query : null;
-    const limit =
+    const rawLimit =
       typeof candidate.limit === "number" && Number.isFinite(candidate.limit)
         ? candidate.limit
         : 5;
+    // Cap at MAX_SEARCH_LIMIT to prevent unbounded HNSW traversal.
+    const limit = Math.min(Math.max(1, Math.floor(rawLimit)), MAX_SEARCH_LIMIT);
     if (query) {
       return { query, limit };
     }

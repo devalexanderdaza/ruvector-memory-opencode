@@ -1,6 +1,25 @@
 import { resolve } from "node:path";
 
 import { logger } from "../shared/logger.js";
+
+/**
+ * Composite ranking weight constants for memory_search.
+ *
+ * Scores use "lower is better" (distance semantics).
+ * Boosts subtract from the base cosine distance, making a memory rank higher.
+ *
+ * Formula:
+ *   compositeScore = cosineDist - priorityBoost - recencyBoost - confidenceBoost
+ *
+ *   priorityBoost:  +0.05 for critical, -0.02 for low, 0 for normal
+ *   recencyBoost:   +0.02 if age < 1 day, +0.01 if age < 7 days, 0 otherwise
+ *   confidenceBoost: (confidence - 0.5) * 0.04  →  range [-0.02, +0.02]
+ */
+const PRIORITY_BOOST_CRITICAL = 0.05;
+const PRIORITY_PENALTY_LOW = 0.02;
+const RECENCY_BOOST_DAY = 0.02;
+const RECENCY_BOOST_WEEK = 0.01;
+const CONFIDENCE_SCALE = 0.04;
 import type {
   InitResult,
   MemorySaveResult,
@@ -22,9 +41,7 @@ interface VectorDbLike {
     k: number;
     filter?: Record<string, unknown>;
   }) => Promise<Array<{ id: string; score: number; metadata?: unknown }>>;
-  get: (
-    id: string,
-  ) => Promise<{
+  get: (id: string) => Promise<{
     id?: string;
     vector: Float32Array | number[];
     metadata?: unknown;
@@ -179,19 +196,72 @@ export class VectorStoreAdapter {
 
     const vector = embedTextDeterministic(query, this.config.vector_dimensions);
     const results = await db.search({ vector, k: limit });
-    // In this project build, score behaves like distance for cosine (lower is better).
-    const sorted = [...results].sort((a, b) => a.score - b.score);
+    const now = Date.now();
+
+    const scored = results.map((r) => {
+      const metadata = parseMetadata(r.metadata) ?? {};
+
+      const createdAtValue =
+        typeof metadata.created_at === "string"
+          ? Date.parse(metadata.created_at)
+          : Number.NaN;
+      const ageMs =
+        Number.isFinite(createdAtValue) && createdAtValue >= 0
+          ? now - createdAtValue
+          : null;
+
+      let priorityBoost = 0;
+      const priority = metadata.priority;
+      if (priority === "critical") {
+        priorityBoost = PRIORITY_BOOST_CRITICAL;
+      } else if (priority === "low") {
+        priorityBoost = -PRIORITY_PENALTY_LOW;
+      }
+
+      let recencyBoost = 0;
+      if (ageMs !== null) {
+        const ageDays = ageMs / (1000 * 60 * 60 * 24);
+        if (ageDays < 1) {
+          recencyBoost = RECENCY_BOOST_DAY;
+        } else if (ageDays < 7) {
+          recencyBoost = RECENCY_BOOST_WEEK;
+        }
+      }
+
+      const rawConfidence =
+        typeof metadata.confidence === "number" &&
+        Number.isFinite(metadata.confidence)
+          ? metadata.confidence
+          : 0.5;
+      const normalizedConfidence = Math.max(0, Math.min(1, rawConfidence));
+      // Confidence is centered at 0.5 so legacy memories (without confidence)
+      // keep neutral ordering while higher confidence is preferred.
+      const confidenceBoost = (normalizedConfidence - 0.5) * CONFIDENCE_SCALE;
+
+      // Composite distance: base vector distance adjusted by metadata signals.
+      // Lower composite score is still "better" for ranking.
+      const compositeScore =
+        r.score - priorityBoost - recencyBoost - confidenceBoost;
+
+      return {
+        raw: r,
+        metadata,
+        compositeScore,
+      };
+    });
+
+    const sorted = scored.sort((a, b) => a.compositeScore - b.compositeScore);
     return {
       success: true,
       data: {
-        items: sorted.map((r) => ({
-          id: r.id,
-          score: r.score,
+        items: sorted.map((entry) => ({
+          id: entry.raw.id,
+          score: entry.compositeScore,
           content:
-            typeof parseMetadata(r.metadata)?.content === "string"
-              ? (parseMetadata(r.metadata)?.content as string)
+            typeof entry.metadata.content === "string"
+              ? (entry.metadata.content as string)
               : undefined,
-          metadata: parseMetadata(r.metadata),
+          metadata: entry.metadata,
         })),
       },
     };

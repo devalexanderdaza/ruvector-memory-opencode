@@ -43,7 +43,7 @@ describe("Save + Search integration", () => {
     if (search.success) {
       expect(search.data.items.length).toBeGreaterThan(0);
       expect(search.data.items[0].content).toBe("alpha memory");
-      // For cosine in this build, lower score behaves like "closer" (better).
+      // Composite distance still uses "lower is better" semantics.
       if (search.data.items.length > 1) {
         expect(search.data.items[0].score).toBeLessThanOrEqual(
           search.data.items[1].score,

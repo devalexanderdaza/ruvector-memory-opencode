@@ -64,4 +64,32 @@ describe("memory_search tool", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("caps limit at MAX_SEARCH_LIMIT to prevent resource exhaustion", async () => {
+    const registered: Record<string, (input?: unknown) => Promise<any>> = {};
+
+    const activation = await plugin.activate({
+      projectRoot: TMP_ROOT,
+      runtimeNodeVersion: "22.11.0",
+      toolRegistry: {
+        registerTool(name: string, handler: (input?: unknown) => Promise<any>) {
+          registered[name] = handler;
+        },
+      },
+    });
+
+    expect(activation.success).toBe(true);
+    const memorySave = registered["memory_save"];
+    const memorySearch = registered["memory_search"];
+
+    await memorySave?.("cap test memory");
+
+    // Limit > 100 should still return successfully (capped internally).
+    const result = await memorySearch?.({
+      query: "cap test memory",
+      limit: 999999,
+    });
+    // Should succeed — the cap prevents resource exhaustion rather than rejecting.
+    expect(result.success).toBe(true);
+  });
 });
