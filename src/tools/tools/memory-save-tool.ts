@@ -1,12 +1,9 @@
 import {
+  ensureProjectContextForTools,
   getVectorStoreAdapterForTools,
   initializeMemoryOnFirstOperation,
 } from "../../core/plugin.js";
-import type {
-  MemorySaveInput,
-  MemorySaveResult,
-  ToolResponse,
-} from "../../shared/types.js";
+import type { MemorySaveInput, MemorySaveResult, ToolResponse } from "../../shared/types.js";
 
 function parseContent(input?: unknown): string | null {
   if (typeof input === "string") {
@@ -58,10 +55,7 @@ function buildMetadata(input: unknown): Record<string, unknown> {
     base.priority = candidate.priority;
   }
 
-  if (
-    typeof candidate.confidence === "number" &&
-    Number.isFinite(candidate.confidence)
-  ) {
+  if (typeof candidate.confidence === "number" && Number.isFinite(candidate.confidence)) {
     // Clamp confidence to [0, 1] so ranking remains bounded and deterministic.
     base.confidence = Math.max(0, Math.min(1, candidate.confidence));
   }
@@ -69,12 +63,29 @@ function buildMetadata(input: unknown): Record<string, unknown> {
   return base;
 }
 
+function buildProjectMetadata(detected: {
+  projectRoot: string;
+  projectName: string;
+  projectType: string;
+  primaryLanguage: string;
+  frameworks: string[];
+  stackSignals: string[];
+}): Record<string, unknown> {
+  return {
+    projectContext: detected.projectName,
+    projectName: detected.projectName,
+    projectType: detected.projectType,
+    primaryLanguage: detected.primaryLanguage,
+    frameworks: [...detected.frameworks],
+    stackSignals: [...detected.stackSignals],
+    projectRoot: detected.projectRoot,
+  };
+}
+
 export function createMemorySaveTool(): (
   input?: unknown,
 ) => Promise<ToolResponse<MemorySaveResult>> {
-  return async function memory_save(
-    input?: unknown,
-  ): Promise<ToolResponse<MemorySaveResult>> {
+  return async function memory_save(input?: unknown): Promise<ToolResponse<MemorySaveResult>> {
     const content = parseContent(input);
     if (!content) {
       return {
@@ -102,7 +113,13 @@ export function createMemorySaveTool(): (
 
     try {
       const metadata = buildMetadata(input);
-      return await store.save(content, metadata);
+      const detectedProjectContext = await ensureProjectContextForTools();
+      const projectMetadata = buildProjectMetadata(detectedProjectContext);
+
+      return await store.save(content, {
+        ...metadata,
+        ...projectMetadata,
+      });
     } catch (error) {
       return {
         success: false,

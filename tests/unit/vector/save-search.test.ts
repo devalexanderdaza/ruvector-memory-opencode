@@ -6,6 +6,26 @@ import { afterEach, describe, expect, it } from "vitest";
 import { DEFAULT_CONFIG } from "../../../src/config/defaults.js";
 import { createVectorStoreAdapter } from "../../../src/vector/vector-store.js";
 
+function parseMetadata(
+  metadata: string | Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!metadata) {
+    return {};
+  }
+  if (typeof metadata === "string") {
+    try {
+      const parsed = JSON.parse(metadata);
+      if (parsed && typeof parsed === "object") {
+        return parsed as Record<string, unknown>;
+      }
+      return {};
+    } catch {
+      return {};
+    }
+  }
+  return metadata;
+}
+
 const TMP_ROOT = join(process.cwd(), ".tmp-unit-save-search");
 
 afterEach(() => {
@@ -28,10 +48,11 @@ describe("VectorStoreAdapter save/search", () => {
     const results = await adapter.search("alpha memory", 2);
     expect(results.success).toBe(true);
     if (results.success) {
-      expect(results.data.items[0].content).toBe("alpha memory");
+      expect(results.data.items.length).toBeGreaterThan(0);
+      expect(results.data.items[0]?.content).toBe("alpha memory");
       if (results.data.items.length > 1) {
-        expect(results.data.items[0].score).toBeLessThanOrEqual(
-          results.data.items[1].score,
+        expect(results.data.items[0]?.score ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(
+          results.data.items[1]?.score ?? Number.POSITIVE_INFINITY,
         );
       }
     }
@@ -57,8 +78,12 @@ describe("VectorStoreAdapter save/search", () => {
     expect(results.success).toBe(true);
     if (results.success && results.data.items.length === 2) {
       const [first, second] = results.data.items;
+      expect(first).toBeDefined();
+      expect(second).toBeDefined();
       // Higher priority (critical) memory should rank ahead of low priority for identical text.
-      expect(first.score).toBeLessThanOrEqual(second.score);
+      expect(first?.score ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(
+        second?.score ?? Number.POSITIVE_INFINITY,
+      );
     }
   });
 
@@ -84,8 +109,12 @@ describe("VectorStoreAdapter save/search", () => {
     expect(results.success).toBe(true);
     if (results.success && results.data.items.length === 2) {
       const [first, second] = results.data.items;
+      expect(first).toBeDefined();
+      expect(second).toBeDefined();
       // Higher confidence memory should rank ahead for identical text.
-      expect(first.score).toBeLessThanOrEqual(second.score);
+      expect(first?.score ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(
+        second?.score ?? Number.POSITIVE_INFINITY,
+      );
     }
   });
 
@@ -106,7 +135,7 @@ describe("VectorStoreAdapter save/search", () => {
     expect(res.success).toBe(true);
     if (res.success) {
       for (const item of res.data.items) {
-        const conf = item.metadata?.confidence;
+        const conf = parseMetadata(item.metadata).confidence;
         if (typeof conf === "number") {
           expect(conf).toBeGreaterThanOrEqual(0);
           expect(conf).toBeLessThanOrEqual(1);
@@ -138,7 +167,7 @@ describe("VectorStoreAdapter save/search", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.items.length).toBe(1);
-      expect(result.data.items[0].metadata?.source).toBe("docs");
+      expect(parseMetadata(result.data.items[0]?.metadata).source).toBe("docs");
     }
   });
 
@@ -194,7 +223,7 @@ describe("VectorStoreAdapter save/search", () => {
     if (result.success) {
       expect(result.data.items.length).toBeGreaterThan(0);
       for (const item of result.data.items) {
-        expect(item.metadata?.source).toBe("chat");
+        expect(parseMetadata(item.metadata).source).toBe("chat");
       }
     }
   });

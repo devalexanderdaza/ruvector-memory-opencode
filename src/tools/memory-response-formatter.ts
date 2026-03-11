@@ -13,12 +13,8 @@
  * - Include performance metadata (_meta) for observability
  */
 
+import type { MemorySearchResponse, MemorySearchResult, SearchResult } from "../shared/types.js";
 import { computeConfidence } from "../vector/confidence-calculator.js";
-import type {
-  MemorySearchResult,
-  SearchResult,
-  MemorySearchResponse,
-} from "../shared/types.js";
 
 /**
  * Parses metadata JSON string into an object, with fallback to empty object.
@@ -26,9 +22,7 @@ import type {
  * @param metadata - Raw metadata (could be string, object, or undefined)
  * @returns Parsed metadata object or empty object if invalid
  */
-function parseMetadata(
-  metadata: unknown,
-): Record<string, unknown> {
+function parseMetadata(metadata: unknown): Record<string, unknown> {
   if (typeof metadata === "string") {
     try {
       const parsed = JSON.parse(metadata);
@@ -79,14 +73,12 @@ function ensureIso8601(value: unknown): string {
  * @param queryLatencyMs - Time spent on the search query
  * @returns Fully populated SearchResult with validated fields
  */
-function formatSearchResult(
-  item: {
-    id: string;
-    score?: number;
-    content?: string;
-    metadata?: unknown;
-  },
-): SearchResult {
+function formatSearchResult(item: {
+  id: string;
+  score?: number;
+  content?: string;
+  metadata?: unknown;
+}): SearchResult {
   const metadata = parseMetadata(item.metadata);
 
   // Extract and validate required fields
@@ -122,22 +114,41 @@ function formatSearchResult(
     return typeof pc === "string" ? pc : undefined;
   })();
 
+  const projectName = (() => {
+    const pn = metadata.projectName;
+    return typeof pn === "string" ? pn : undefined;
+  })();
+
+  const projectType = (() => {
+    const pt = metadata.projectType;
+    return typeof pt === "string" ? pt : undefined;
+  })();
+
+  const primaryLanguage = (() => {
+    const pl = metadata.primaryLanguage;
+    return typeof pl === "string" ? pl : undefined;
+  })();
+
+  const frameworks = Array.isArray(metadata.frameworks)
+    ? metadata.frameworks
+        .filter((framework): framework is string => typeof framework === "string")
+        .map((framework) => framework.trim())
+        .filter((framework) => framework.length > 0)
+    : undefined;
+
   // Calculate composite relevance score
-  // The score from vector search is typically a distance (lower is better).
-  // We invert it to a similarity (higher is better) in range [0, 1].
-  // For cosine distance: relevance = max(0, 1 - distance)
+  // The score from vector search is a composite distance (lower = better).
+  // Priority/recency/confidence boosts can make it negative, which maps to
+  // relevance > 1 and is clamped to 1. Using Math.abs would incorrectly
+  // penalise those boosted entries by treating negative scores as large distances.
   const vectorScore = item.score ?? 0;
-  const relevance = Math.max(0, Math.min(1.0, 1.0 - Math.abs(vectorScore)));
+  const relevance = Math.max(0, Math.min(1.0, 1.0 - vectorScore));
 
   // Calculate confidence from metadata
   const confidence = computeConfidence({
     accessCount: metadata.accessCount as number | undefined,
-    positiveFeedbackCount: metadata.positiveFeedbackCount as
-      | number
-      | undefined,
-    negativeFeedbackCount: metadata.negativeFeedbackCount as
-      | number
-      | undefined,
+    positiveFeedbackCount: metadata.positiveFeedbackCount as number | undefined,
+    negativeFeedbackCount: metadata.negativeFeedbackCount as number | undefined,
   });
 
   return {
@@ -150,6 +161,13 @@ function formatSearchResult(
     ...(tags && { tags }),
     ...(importance !== undefined && { importance }),
     ...(projectContext && { projectContext }),
+    ...(projectName && { projectName }),
+    ...(projectType && { projectType }),
+    ...(primaryLanguage && { primaryLanguage }),
+    // Include frameworks when the field is present in metadata, even if empty.
+    // An empty array means "detected, no known frameworks" which is distinct
+    // from undefined ("metadata absent").
+    ...(frameworks !== undefined && { frameworks }),
   };
 }
 
@@ -169,15 +187,11 @@ export function formatSearchResults(
   queryLatencyMs = 0,
 ): MemorySearchResponse {
   if (!searchResults || !Array.isArray(searchResults.items)) {
-    throw new Error(
-      "Invalid search results structure: missing items array",
-    );
+    throw new Error("Invalid search results structure: missing items array");
   }
 
   // Format each result
-  const formatted: SearchResult[] = searchResults.items.map((item) =>
-    formatSearchResult(item),
-  );
+  const formatted: SearchResult[] = searchResults.items.map((item) => formatSearchResult(item));
 
   // Sort by relevance descending
   formatted.sort((a, b) => b.relevance - a.relevance);

@@ -2,13 +2,13 @@ import {
   getVectorStoreAdapterForTools,
   initializeMemoryOnFirstOperation,
 } from "../../core/plugin.js";
-import { formatSearchResults } from "../memory-response-formatter.js";
 import type {
   MemorySearchFilters,
   MemorySearchInput,
   MemorySearchResponse,
   ToolResponse,
 } from "../../shared/types.js";
+import { formatSearchResults } from "../memory-response-formatter.js";
 
 /** Hard cap on retrieved items to prevent resource-exhaustion via large k searches. */
 const MAX_SEARCH_LIMIT = 100;
@@ -69,6 +69,48 @@ function parseFilters(rawFilters: unknown): {
     parsed.source = candidate.source.trim();
   }
 
+  if (candidate.project_name !== undefined) {
+    if (typeof candidate.project_name !== "string" || !candidate.project_name.trim()) {
+      return {
+        error: "memory_search filters.project_name must be a non-empty string",
+      };
+    }
+    parsed.project_name = candidate.project_name.trim();
+  }
+
+  if (candidate.project_type !== undefined) {
+    if (typeof candidate.project_type !== "string" || !candidate.project_type.trim()) {
+      return {
+        error: "memory_search filters.project_type must be a non-empty string",
+      };
+    }
+    parsed.project_type = candidate.project_type.trim();
+  }
+
+  if (candidate.primary_language !== undefined) {
+    if (typeof candidate.primary_language !== "string" || !candidate.primary_language.trim()) {
+      return {
+        error: "memory_search filters.primary_language must be a non-empty string",
+      };
+    }
+    parsed.primary_language = candidate.primary_language.trim();
+  }
+
+  if (candidate.frameworks !== undefined) {
+    if (!Array.isArray(candidate.frameworks)) {
+      return {
+        error: "memory_search filters.frameworks must be an array of non-empty strings",
+      };
+    }
+    const frameworks = candidate.frameworks
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0);
+    if (frameworks.length > 0) {
+      parsed.frameworks = frameworks;
+    }
+  }
+
   if (candidate.created_after !== undefined) {
     if (
       typeof candidate.created_after !== "string" &&
@@ -120,25 +162,22 @@ function parseFilters(rawFilters: unknown): {
     };
   }
 
-  return {
-    filters: Object.keys(parsed).length > 0 ? parsed : undefined,
-  };
+  if (Object.keys(parsed).length > 0) {
+    return { filters: parsed };
+  }
+
+  return {};
 }
 
-function parseSearchInput(
-  input?: unknown,
-): ParsedSearchInput | null {
+function parseSearchInput(input?: unknown): ParsedSearchInput | null {
   if (typeof input === "string") {
     return { query: input, limit: 5 };
   }
   if (input && typeof input === "object") {
-    const candidate = input as Partial<MemorySearchInput> &
-      Record<string, unknown>;
+    const candidate = input as Partial<MemorySearchInput> & Record<string, unknown>;
     const query = typeof candidate.query === "string" ? candidate.query : null;
     const rawLimit =
-      typeof candidate.limit === "number" && Number.isFinite(candidate.limit)
-        ? candidate.limit
-        : 5;
+      typeof candidate.limit === "number" && Number.isFinite(candidate.limit) ? candidate.limit : 5;
     // Cap at MAX_SEARCH_LIMIT to prevent unbounded HNSW traversal.
     const limit = Math.min(Math.max(1, Math.floor(rawLimit)), MAX_SEARCH_LIMIT);
     if (query) {
@@ -146,7 +185,10 @@ function parseSearchInput(
       if (filterParse.error) {
         return null;
       }
-      return { query, limit, filters: filterParse.filters };
+      if (filterParse.filters) {
+        return { query, limit, filters: filterParse.filters };
+      }
+      return { query, limit };
     }
   }
   return null;
@@ -199,11 +241,7 @@ export function createMemorySearchTool(): (
 
     try {
       const startTime = Date.now();
-      const storeResult = await store.search(
-        parsed.query,
-        parsed.limit,
-        parsed.filters,
-      );
+      const storeResult = await store.search(parsed.query, parsed.limit, parsed.filters);
 
       if (!storeResult.success) {
         return storeResult as ToolResponse<MemorySearchResponse>;
@@ -212,11 +250,7 @@ export function createMemorySearchTool(): (
       const queryLatencyMs = Date.now() - startTime;
 
       // Format raw results into enriched response with confidence, source, etc.
-      const enrichedResponse = formatSearchResults(
-        storeResult.data,
-        parsed.query,
-        queryLatencyMs,
-      );
+      const enrichedResponse = formatSearchResults(storeResult.data, parsed.query, queryLatencyMs);
 
       return {
         success: true,

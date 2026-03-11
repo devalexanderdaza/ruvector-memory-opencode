@@ -20,6 +20,10 @@ describe("Memory Response Formatter", () => {
               positiveFeedbackCount: 2,
               negativeFeedbackCount: 0,
               projectContext: "ruvector-memory-opencode",
+              projectName: "ruvector-memory-opencode",
+              projectType: "node-package",
+              primaryLanguage: "typescript",
+              frameworks: ["react"],
             }),
           },
         ],
@@ -39,16 +43,32 @@ describe("Memory Response Formatter", () => {
       expect(item?.tags).toEqual(["patterns", "typescript"]);
       expect(item?.importance).toBe(4);
       expect(item?.projectContext).toBe("ruvector-memory-opencode");
-      expect(item?.relevance).toBe(0.9);
+      expect(item?.projectName).toBe("ruvector-memory-opencode");
+      expect(item?.projectType).toBe("node-package");
+      expect(item?.primaryLanguage).toBe("typescript");
+      expect(item?.frameworks).toEqual(["react"]);
+      expect(item?.relevance).toBeCloseTo(0.9);
       expect(item?.confidence).toBeCloseTo(0.75);
     });
 
     it("sorts results by relevance descending", () => {
       const input = {
         items: [
-          { id: "mem-1", score: 0.5, metadata: JSON.stringify({ created_at: "2026-03-10T00:00:00Z", source: "manual" }) },
-          { id: "mem-2", score: 0.1, metadata: JSON.stringify({ created_at: "2026-03-10T00:00:00Z", source: "manual" }) },
-          { id: "mem-3", score: 0.3, metadata: JSON.stringify({ created_at: "2026-03-10T00:00:00Z", source: "manual" }) },
+          {
+            id: "mem-1",
+            score: 0.5,
+            metadata: JSON.stringify({ created_at: "2026-03-10T00:00:00Z", source: "manual" }),
+          },
+          {
+            id: "mem-2",
+            score: 0.1,
+            metadata: JSON.stringify({ created_at: "2026-03-10T00:00:00Z", source: "manual" }),
+          },
+          {
+            id: "mem-3",
+            score: 0.3,
+            metadata: JSON.stringify({ created_at: "2026-03-10T00:00:00Z", source: "manual" }),
+          },
         ],
       };
 
@@ -57,6 +77,34 @@ describe("Memory Response Formatter", () => {
       expect(result.results[0]?.id).toBe("mem-2");
       expect(result.results[1]?.id).toBe("mem-3");
       expect(result.results[2]?.id).toBe("mem-1");
+    });
+
+    it("ranks boosted entry (negative composite score) above non-boosted entry", () => {
+      // A priority/recency boost can push the composite distance below zero.
+      // score -0.2 (boosted) → relevance = min(1, 1-(-0.2)) = 1.0  ← should rank first
+      // score  0.1 (normal)  → relevance = 1 - 0.1 = 0.9           ← should rank second
+      // The old Math.abs implementation gave the boosted entry 0.8 (wrongly behind 0.9).
+      const input = {
+        items: [
+          {
+            id: "mem-normal",
+            score: 0.1,
+            metadata: JSON.stringify({ created_at: "2026-03-10T00:00:00Z", source: "manual" }),
+          },
+          {
+            id: "mem-boosted",
+            score: -0.2,
+            metadata: JSON.stringify({ created_at: "2026-03-10T00:00:00Z", source: "manual" }),
+          },
+        ],
+      };
+
+      const result = formatSearchResults(input as any, "boosted-test");
+
+      expect(result.results[0]?.id).toBe("mem-boosted");
+      expect(result.results[0]?.relevance).toBe(1.0);
+      expect(result.results[1]?.id).toBe("mem-normal");
+      expect(result.results[1]?.relevance).toBeCloseTo(0.9);
     });
 
     it("handles empty results", () => {
@@ -86,6 +134,32 @@ describe("Memory Response Formatter", () => {
       expect(item?.tags).toBeUndefined();
       expect(item?.importance).toBeUndefined();
       expect(item?.projectContext).toBeUndefined();
+      // frameworks is undefined when metadata has no frameworks field at all
+      expect(item?.frameworks).toBeUndefined();
+    });
+
+    it("preserves empty frameworks array when metadata has frameworks: []", () => {
+      // An empty array means 'detected, no known frameworks' which is distinct
+      // from undefined ('metadata absent'). The formatter must not drop it.
+      const input = {
+        items: [
+          {
+            id: "mem-no-fw",
+            score: 0.2,
+            metadata: JSON.stringify({
+              created_at: "2026-03-10T00:00:00Z",
+              source: "agent",
+              frameworks: [],
+            }),
+          },
+        ],
+      };
+
+      const result = formatSearchResults(input as any, "empty-fw");
+      const item = result.results[0];
+
+      expect(item?.frameworks).toBeDefined();
+      expect(item?.frameworks).toEqual([]);
     });
 
     it("preserves ISO-8601 timestamp from metadata", () => {
@@ -129,7 +203,10 @@ describe("Memory Response Formatter", () => {
           {
             id: "mem-invalid-source",
             score: 0.1,
-            metadata: JSON.stringify({ created_at: "2026-03-10T00:00:00Z", source: "invalid_source_value" }),
+            metadata: JSON.stringify({
+              created_at: "2026-03-10T00:00:00Z",
+              source: "invalid_source_value",
+            }),
           },
         ],
       };
@@ -163,7 +240,11 @@ describe("Memory Response Formatter", () => {
           {
             id: "mem-low",
             score: 0.1,
-            metadata: JSON.stringify({ created_at: "2026-03-10T00:00:00Z", source: "manual", importance: 1 }),
+            metadata: JSON.stringify({
+              created_at: "2026-03-10T00:00:00Z",
+              source: "manual",
+              importance: 1,
+            }),
           },
         ],
       };
@@ -176,7 +257,11 @@ describe("Memory Response Formatter", () => {
           {
             id: "mem-invalid-importance",
             score: 0.1,
-            metadata: JSON.stringify({ created_at: "2026-03-10T00:00:00Z", source: "manual", importance: 10 }),
+            metadata: JSON.stringify({
+              created_at: "2026-03-10T00:00:00Z",
+              source: "manual",
+              importance: 10,
+            }),
           },
         ],
       };
@@ -246,12 +331,20 @@ describe("Memory Response Formatter", () => {
           {
             id: "mem-a",
             score: 0.2,
-            metadata: JSON.stringify({ created_at: "2026-03-10T00:00:00Z", source: "manual", tags: ["pattern"] }),
+            metadata: JSON.stringify({
+              created_at: "2026-03-10T00:00:00Z",
+              source: "manual",
+              tags: ["pattern"],
+            }),
           },
           {
             id: "mem-b",
             score: 0.1,
-            metadata: JSON.stringify({ created_at: "2026-03-09T00:00:00Z", source: "import", importance: 5 }),
+            metadata: JSON.stringify({
+              created_at: "2026-03-09T00:00:00Z",
+              source: "import",
+              importance: 5,
+            }),
           },
           {
             id: "mem-c",

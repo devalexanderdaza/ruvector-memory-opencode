@@ -77,10 +77,7 @@ function toEpochMs(value: unknown): number | null {
   return null;
 }
 
-function includesAnyTag(
-  metadata: Record<string, unknown>,
-  expectedTags: string[],
-): boolean {
+function includesAnyTag(metadata: Record<string, unknown>, expectedTags: string[]): boolean {
   if (!Array.isArray(metadata.tags)) {
     return false;
   }
@@ -94,10 +91,25 @@ function includesAnyTag(
   return expectedTags.some((tag) => tagSet.has(tag));
 }
 
-function matchesFilters(
+function includesAnyFramework(
   metadata: Record<string, unknown>,
-  filters: MemorySearchFilters,
+  expectedFrameworks: string[],
 ): boolean {
+  if (!Array.isArray(metadata.frameworks)) {
+    return false;
+  }
+
+  const frameworkSet = new Set(
+    metadata.frameworks
+      .filter((framework): framework is string => typeof framework === "string")
+      .map((framework) => framework.trim())
+      .filter((framework) => framework.length > 0),
+  );
+
+  return expectedFrameworks.some((framework) => frameworkSet.has(framework));
+}
+
+function matchesFilters(metadata: Record<string, unknown>, filters: MemorySearchFilters): boolean {
   if (filters.tags && filters.tags.length > 0) {
     if (!includesAnyTag(metadata, filters.tags)) {
       return false;
@@ -108,26 +120,40 @@ function matchesFilters(
     return false;
   }
 
+  if (typeof filters.project_name === "string" && metadata.projectName !== filters.project_name) {
+    return false;
+  }
+
+  if (typeof filters.project_type === "string" && metadata.projectType !== filters.project_type) {
+    return false;
+  }
+
   if (
-    filters.created_after !== undefined ||
-    filters.created_before !== undefined
+    typeof filters.primary_language === "string" &&
+    metadata.primaryLanguage !== filters.primary_language
   ) {
+    return false;
+  }
+
+  if (
+    Array.isArray(filters.frameworks) &&
+    filters.frameworks.length > 0 &&
+    !includesAnyFramework(metadata, filters.frameworks)
+  ) {
+    return false;
+  }
+
+  if (filters.created_after !== undefined || filters.created_before !== undefined) {
     const createdAtEpoch = toEpochMs(metadata.created_at);
     if (createdAtEpoch === null) {
       return false;
     }
 
-    if (
-      typeof filters.created_after === "number" &&
-      !(createdAtEpoch > filters.created_after)
-    ) {
+    if (typeof filters.created_after === "number" && !(createdAtEpoch > filters.created_after)) {
       return false;
     }
 
-    if (
-      typeof filters.created_before === "number" &&
-      !(createdAtEpoch < filters.created_before)
-    ) {
+    if (typeof filters.created_before === "number" && !(createdAtEpoch < filters.created_before)) {
       return false;
     }
   }
@@ -175,8 +201,7 @@ export class VectorStoreAdapter {
     const storagePath = resolve(this.projectRoot, this.config.db_path);
     const configuredMetric = this.config.vector_metric;
     // The NAPI enum expects TitleCase variants (e.g. "Cosine") in this project version.
-    const coreMetric =
-      configuredMetric === "cosine" ? ("Cosine" as const) : "Cosine";
+    const coreMetric = configuredMetric === "cosine" ? ("Cosine" as const) : "Cosine";
     this.db = new module.VectorDb({
       dimensions: this.config.vector_dimensions,
       storagePath,
@@ -234,10 +259,7 @@ export class VectorStoreAdapter {
       };
     }
 
-    const vector = embedTextDeterministic(
-      content,
-      this.config.vector_dimensions,
-    );
+    const vector = embedTextDeterministic(content, this.config.vector_dimensions);
     const id = await db.insert({
       vector,
       // Some @ruvector/core builds require metadata to be a string; store JSON.
@@ -269,10 +291,7 @@ export class VectorStoreAdapter {
     const normalizedLimit = Math.max(1, Math.floor(limit));
     const hasFilters = Boolean(filters && Object.keys(filters).length > 0);
     const searchK = hasFilters
-      ? Math.max(
-          normalizedLimit,
-          Math.floor(normalizedLimit * FILTER_OVERSAMPLE_FACTOR),
-        )
+      ? Math.max(normalizedLimit, Math.floor(normalizedLimit * FILTER_OVERSAMPLE_FACTOR))
       : normalizedLimit;
 
     const vector = embedTextDeterministic(query, this.config.vector_dimensions);
@@ -283,10 +302,7 @@ export class VectorStoreAdapter {
       const metadata = parseMetadata(r.metadata) ?? {};
 
       const createdAtValue = toEpochMs(metadata.created_at);
-      const ageMs =
-        createdAtValue !== null && createdAtValue >= 0
-          ? now - createdAtValue
-          : null;
+      const ageMs = createdAtValue !== null && createdAtValue >= 0 ? now - createdAtValue : null;
 
       let priorityBoost = 0;
       const priority = metadata.priority;
@@ -307,8 +323,7 @@ export class VectorStoreAdapter {
       }
 
       const rawConfidence =
-        typeof metadata.confidence === "number" &&
-        Number.isFinite(metadata.confidence)
+        typeof metadata.confidence === "number" && Number.isFinite(metadata.confidence)
           ? metadata.confidence
           : 0.5;
       const normalizedConfidence = Math.max(0, Math.min(1, rawConfidence));
@@ -318,8 +333,7 @@ export class VectorStoreAdapter {
 
       // Composite distance: base vector distance adjusted by metadata signals.
       // Lower composite score is still "better" for ranking.
-      const compositeScore =
-        r.score - priorityBoost - recencyBoost - confidenceBoost;
+      const compositeScore = r.score - priorityBoost - recencyBoost - confidenceBoost;
 
       return {
         raw: r,
@@ -328,10 +342,12 @@ export class VectorStoreAdapter {
       };
     });
 
-    const filtered = hasFilters
-      ? scored.filter((entry) => matchesFilters(entry.metadata, filters))
+    const activeFilters = hasFilters ? filters : undefined;
+    const filtered = activeFilters
+      ? scored.filter((entry) => matchesFilters(entry.metadata, activeFilters))
       : scored;
     const sorted = filtered.sort((a, b) => a.compositeScore - b.compositeScore);
+
     return {
       success: true,
       data: {
@@ -344,15 +360,19 @@ export class VectorStoreAdapter {
          *     created_at, source, tags, priority, confidence, accessCount,
          *     positiveFeedbackCount, negativeFeedbackCount, projectContext, importance
          */
-        items: sorted.slice(0, normalizedLimit).map((entry) => ({
-          id: entry.raw.id,
-          score: entry.compositeScore,
-          content:
+        items: sorted.slice(0, normalizedLimit).map((entry) => {
+          const content =
             typeof entry.metadata.content === "string"
               ? (entry.metadata.content as string)
-              : undefined,
-          metadata: entry.metadata,
-        })),
+              : undefined;
+
+          return {
+            id: entry.raw.id,
+            score: entry.compositeScore,
+            ...(content !== undefined && { content }),
+            metadata: entry.metadata,
+          };
+        }),
       },
     };
   }

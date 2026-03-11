@@ -238,6 +238,62 @@ describe("memory_search tool", () => {
     });
   });
 
+  it("returns EINVALID when filters.project_name is empty", async () => {
+    const registered: Record<string, (input?: unknown) => Promise<any>> = {};
+
+    const activation = await plugin.activate({
+      projectRoot: TMP_ROOT,
+      runtimeNodeVersion: "22.11.0",
+      toolRegistry: {
+        registerTool(name: string, handler: (input?: unknown) => Promise<any>) {
+          registered[name] = handler;
+        },
+      },
+    });
+
+    expect(activation.success).toBe(true);
+    const memorySearch = registered["memory_search"];
+
+    const result = await memorySearch?.({
+      query: "seed memory",
+      filters: { project_name: "   " },
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      code: "EINVALID",
+      reason: "validation",
+    });
+  });
+
+  it("returns EINVALID when filters.frameworks is not an array", async () => {
+    const registered: Record<string, (input?: unknown) => Promise<any>> = {};
+
+    const activation = await plugin.activate({
+      projectRoot: TMP_ROOT,
+      runtimeNodeVersion: "22.11.0",
+      toolRegistry: {
+        registerTool(name: string, handler: (input?: unknown) => Promise<any>) {
+          registered[name] = handler;
+        },
+      },
+    });
+
+    expect(activation.success).toBe(true);
+    const memorySearch = registered["memory_search"];
+
+    const result = await memorySearch?.({
+      query: "seed memory",
+      filters: { frameworks: "react" },
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      code: "EINVALID",
+      reason: "validation",
+    });
+  });
+
   it("returns EINVALID when filters.created_before is invalid", async () => {
     const registered: Record<string, (input?: unknown) => Promise<any>> = {};
 

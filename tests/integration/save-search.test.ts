@@ -100,4 +100,47 @@ describe("Save + Search integration", () => {
       }
     }
   });
+
+  it("persists and filters by detected project metadata", async () => {
+    const registered: Record<string, (input?: unknown) => Promise<any>> = {};
+
+    const activation = await plugin.activate({
+      projectRoot: TMP_ROOT,
+      runtimeNodeVersion: "22.11.0",
+      toolRegistry: {
+        registerTool(name: string, handler: (input?: unknown) => Promise<any>) {
+          registered[name] = handler;
+        },
+      },
+    });
+
+    expect(activation.success).toBe(true);
+
+    const memorySave = registered["memory_save"];
+    const memorySearch = registered["memory_search"];
+    expect(typeof memorySave).toBe("function");
+    expect(typeof memorySearch).toBe("function");
+
+    const save = await memorySave?.({
+      content: "metadata roundtrip",
+      tags: ["project-meta"],
+    });
+    expect(save.success).toBe(true);
+
+    const search = await memorySearch?.({
+      query: "metadata roundtrip",
+      limit: 5,
+      filters: {
+        project_name: ".tmp-save-search-tests",
+      },
+    });
+
+    expect(search.success).toBe(true);
+    if (search.success) {
+      expect(search.data.results.length).toBeGreaterThan(0);
+      const item = search.data.results[0];
+      expect(item.projectName).toBe(".tmp-save-search-tests");
+      expect(item.projectContext).toBe(".tmp-save-search-tests");
+    }
+  });
 });
