@@ -19,6 +19,53 @@ export interface RuVectorMemoryConfig {
   backup_retention_days: number;
   backup_retention_weeks: number;
   backup_retention_months: number;
+  memory_injection_enabled: boolean;
+  memory_injection_relevance_threshold: number;
+  memory_injection_max_token_budget: number;
+}
+
+/**
+ * Payload shape for a single memory entry prepared for agent context injection.
+ */
+export interface MemoryContextPayload {
+  id: string;
+  content: string;
+  source: string;
+  confidence: number;
+  relevance_score: number;
+  timestamp: string;
+  tags?: string[];
+}
+
+/**
+ * Configuration for the passive memory context injection subsystem.
+ * Populated from RuVectorMemoryConfig fields at plugin activation time.
+ */
+export interface MemoryInjectionConfig {
+  /** Whether to automatically inject memories into agent context. Default: true */
+  enablePassiveInjection: boolean;
+  /** Maximum number of memories to inject. Maps to preload_top_memories. Default: 5 */
+  maxMemoriesToInject: number;
+  /** Minimum relevance score [0,1] for a memory to be injected. Default: 0.7 */
+  relevanceThreshold: number;
+  /** Estimated token budget for injected memory content. Default: 2000 */
+  maxTokenBudget: number;
+  /** Output format for the injected memory block. Default: 'markdown' */
+  formattingStyle: "markdown" | "json";
+}
+
+/**
+ * Result returned by MemoryContextInjector.inject().
+ */
+export interface MemoryInjectionResult {
+  /** Formatted memory context string ready for injection into system prompt */
+  context: string;
+  /** Number of memories actually included in context */
+  memoriesInjected: number;
+  /** Estimated token count of the full context string */
+  tokensUsed: number;
+  /** True if injection was skipped (disabled, circuit breaker open) */
+  skipped: boolean;
 }
 
 export type ToolResponse<T> =
