@@ -5,10 +5,10 @@
 
 - **Project**: ruvector-memory-opencode
 - **User**: Alexander
-- **Communication Language**: Spanish
+- **Communication Language**: Español/Spanish
 - **Document Output Language**: English
 - **User Skill Level**: intermediate
-- **Output Folder**: _bmad-output
+- **Output Folder**: {project-root}/_bmad-output
 - **Planning Artifacts**: {project-root}/_bmad-output/planning-artifacts
 - **Implementation Artifacts**: {project-root}/_bmad-output/implementation-artifacts
 - **Project Knowledge**: {project-root}/docs
