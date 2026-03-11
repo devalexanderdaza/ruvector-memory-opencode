@@ -5,6 +5,19 @@ export interface PluginActivationContext {
   toolRegistry?: unknown;
 }
 
+export interface ProjectDetectionOptions {
+  projectRoot?: string;
+}
+
+export interface ProjectDetectionResult {
+  projectRoot: string;
+  projectName: string;
+  projectType: string;
+  primaryLanguage: string;
+  frameworks: string[];
+  stackSignals: string[];
+}
+
 export interface RuVectorMemoryConfig {
   db_path: string;
   cache_size: number;
@@ -159,6 +172,10 @@ export interface SearchResult {
   tags?: string[];
   importance?: number;
   projectContext?: string;
+  projectName?: string;
+  projectType?: string;
+  primaryLanguage?: string;
+  frameworks?: string[];
 }
 
 /**
@@ -185,6 +202,10 @@ export interface MemorySearchFilters {
   source?: string;
   created_after?: string | number;
   created_before?: string | number;
+  project_name?: string;
+  project_type?: string;
+  primary_language?: string;
+  frameworks?: string[];
 }
 
 export interface MemorySearchInput {

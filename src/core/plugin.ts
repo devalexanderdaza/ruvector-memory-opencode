@@ -1,5 +1,5 @@
 import { loadConfig } from "../config/index.js";
-import { detectProjectRoot } from "../detection/project-detector.js";
+import { detectProjectContext } from "../detection/project-detector.js";
 import { NodeVersionError, RuVectorMemoryError } from "../shared/errors.js";
 import { logger } from "../shared/logger.js";
 import type {
@@ -8,6 +8,7 @@ import type {
   MemoryInjectionConfig,
   MemoryInjectionResult,
   PluginActivationContext,
+  ProjectDetectionResult,
   RuVectorMemoryConfig,
   ToolResponse,
 } from "../shared/types.js";
@@ -23,6 +24,8 @@ let activeConfig: RuVectorMemoryConfig | null = null;
 let vectorStore: VectorStoreAdapter | null = null;
 let memoryInjector: MemoryContextInjector | null = null;
 let preloadedMemoryContext = "";
+let activeProjectContext: ProjectDetectionResult | null = null;
+let inFlightProjectContextPromise: Promise<ProjectDetectionResult> | null = null;
 
 // Placeholder implementations - initializeVectorStore and preloadTopMemories will be
 // expanded in later stories. Project context detection is wired to detection subsystem.
@@ -30,13 +33,41 @@ async function initializeVectorStore(): Promise<void> {
   return Promise.resolve();
 }
 
-async function detectProjectContext(): Promise<void> {
-  const { projectRoot } = detectProjectRoot({ projectRoot: activeProjectRoot });
-  activeProjectRoot = projectRoot;
+async function detectAndStoreProjectContext(): Promise<ProjectDetectionResult> {
+  const detected = await detectProjectContext({ projectRoot: activeProjectRoot });
+  activeProjectRoot = detected.projectRoot;
+  activeProjectContext = detected;
+  return detected;
+}
 
-  logger.info("project_context_detected", {
-    project_root: activeProjectRoot,
-  });
+export async function ensureProjectContextForTools(): Promise<ProjectDetectionResult> {
+  if (activeProjectContext) {
+    return activeProjectContext;
+  }
+
+  if (inFlightProjectContextPromise) {
+    return inFlightProjectContextPromise;
+  }
+
+  inFlightProjectContextPromise = detectAndStoreProjectContext()
+    .catch(() => {
+      // Fallback keeps tool contract no-throw while preserving deterministic shape.
+      const fallback: ProjectDetectionResult = {
+        projectRoot: activeProjectRoot,
+        projectName: "unknown-project",
+        projectType: "generic",
+        primaryLanguage: "unknown",
+        frameworks: [],
+        stackSignals: ["detection:fallback"],
+      };
+      activeProjectContext = fallback;
+      return fallback;
+    })
+    .finally(() => {
+      inFlightProjectContextPromise = null;
+    });
+
+  return inFlightProjectContextPromise;
 }
 
 async function preloadTopMemories(): Promise<void> {
@@ -95,15 +126,17 @@ export async function activatePlugin(
     injectTools(context);
 
     // Background initialization - failures set degraded mode but don't block activation
-    Promise.all([initializeVectorStore(), detectProjectContext(), preloadTopMemories()]).catch(
-      (error: unknown) => {
-        isDegraded = true;
-        logger.warn("plugin_background_init_failed", {
-          error: toErrorMessage(error),
-          degraded: true,
-        });
-      },
-    );
+    Promise.all([
+      initializeVectorStore(),
+      ensureProjectContextForTools(),
+      preloadTopMemories(),
+    ]).catch((error: unknown) => {
+      isDegraded = true;
+      logger.warn("plugin_background_init_failed", {
+        error: toErrorMessage(error),
+        degraded: true,
+      });
+    });
 
     logger.info("plugin_activated", {
       activation_ms: Math.round(performance.now() - start),
@@ -169,6 +202,8 @@ export function resetPluginStateForTests(): void {
   activeConfig = null;
   preloadedMemoryContext = "";
   memoryInjector = null;
+  activeProjectContext = null;
+  inFlightProjectContextPromise = null;
   if (vectorStore) {
     vectorStore.resetForTests();
   }
@@ -181,6 +216,18 @@ export function getPluginState(): { degraded: boolean } {
 
 export function getVectorStoreAdapterForTools(): VectorStoreAdapter | null {
   return vectorStore;
+}
+
+export function getDetectedProjectContext(): ProjectDetectionResult | null {
+  if (!activeProjectContext) {
+    return null;
+  }
+
+  return {
+    ...activeProjectContext,
+    frameworks: [...activeProjectContext.frameworks],
+    stackSignals: [...activeProjectContext.stackSignals],
+  };
 }
 
 /**
