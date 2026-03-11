@@ -31,7 +31,7 @@ describe("VectorStoreAdapter metadata parsing", () => {
     await db.insert({
       vector: embedTextDeterministic("weird", DEFAULT_CONFIG.vector_dimensions),
       metadata: "not-json-metadata",
-    });
+    } as any);
 
     const results = await adapter.search("weird", 5);
     expect(results.success).toBe(true);

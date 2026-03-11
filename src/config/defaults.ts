@@ -14,4 +14,7 @@ export const DEFAULT_CONFIG: RuVectorMemoryConfig = {
   backup_retention_days: 7,
   backup_retention_weeks: 4,
   backup_retention_months: 12,
+  memory_injection_enabled: true,
+  memory_injection_relevance_threshold: 0.7,
+  memory_injection_max_token_budget: 2000,
 };

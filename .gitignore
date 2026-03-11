@@ -9,6 +9,10 @@ coverage/
 # Runtime/temp
 .tmp-test-workspace/
 *.log
+.opencode/metrics.json
+.opencode/ruvector_memory.db
+.opencode/applied-defaults.json
+.opencode/.ruvector_backups/
 
 # Editor/system
 .DS_Store

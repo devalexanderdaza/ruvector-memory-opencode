@@ -14,6 +14,9 @@ export const configSchema = z.object({
   backup_retention_days: z.number().int().positive(),
   backup_retention_weeks: z.number().int().positive(),
   backup_retention_months: z.number().int().positive(),
+  memory_injection_enabled: z.boolean(),
+  memory_injection_relevance_threshold: z.number().min(0).max(1),
+  memory_injection_max_token_budget: z.number().int().positive(),
 });
 
 export type ConfigSchema = z.infer<typeof configSchema>;

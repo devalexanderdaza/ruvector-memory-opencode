@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { logger } from "../shared/logger.js";
 import type {
   InitResult,
+  MemorySearchFilters,
   MemorySaveResult,
   MemorySearchResult,
   RuVectorMemoryConfig,
@@ -10,6 +11,26 @@ import type {
 } from "../shared/types.js";
 import { embedTextDeterministic } from "../shared/utils.js";
 import { initializeDatabase } from "./initialization.js";
+
+/**
+ * Composite ranking weight constants for memory_search.
+ *
+ * Scores use "lower is better" (distance semantics).
+ * Boosts subtract from the base cosine distance, making a memory rank higher.
+ *
+ * Formula:
+ *   compositeScore = cosineDist - priorityBoost - recencyBoost - confidenceBoost
+ *
+ *   priorityBoost:  +0.05 for critical, -0.02 for low, 0 for normal
+ *   recencyBoost:   +0.02 if age < 1 day, +0.01 if age < 7 days, 0 otherwise
+ *   confidenceBoost: (confidence - 0.5) * 0.04  →  range [-0.02, +0.02]
+ */
+const PRIORITY_BOOST_CRITICAL = 0.05;
+const PRIORITY_PENALTY_LOW = 0.02;
+const RECENCY_BOOST_DAY = 0.02;
+const RECENCY_BOOST_WEEK = 0.01;
+const CONFIDENCE_SCALE = 0.04;
+const FILTER_OVERSAMPLE_FACTOR = 5;
 
 interface VectorDbLike {
   insert: (entry: {
@@ -22,9 +43,7 @@ interface VectorDbLike {
     k: number;
     filter?: Record<string, unknown>;
   }) => Promise<Array<{ id: string; score: number; metadata?: unknown }>>;
-  get: (
-    id: string,
-  ) => Promise<{
+  get: (id: string) => Promise<{
     id?: string;
     vector: Float32Array | number[];
     metadata?: unknown;
@@ -45,6 +64,101 @@ function parseMetadata(metadata: unknown): Record<string, unknown> | undefined {
   } catch {
     return undefined;
   }
+}
+
+function toEpochMs(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function includesAnyTag(metadata: Record<string, unknown>, expectedTags: string[]): boolean {
+  if (!Array.isArray(metadata.tags)) {
+    return false;
+  }
+
+  const tagSet = new Set(
+    metadata.tags
+      .filter((tag): tag is string => typeof tag === "string")
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0),
+  );
+  return expectedTags.some((tag) => tagSet.has(tag));
+}
+
+function includesAnyFramework(
+  metadata: Record<string, unknown>,
+  expectedFrameworks: string[],
+): boolean {
+  if (!Array.isArray(metadata.frameworks)) {
+    return false;
+  }
+
+  const frameworkSet = new Set(
+    metadata.frameworks
+      .filter((framework): framework is string => typeof framework === "string")
+      .map((framework) => framework.trim())
+      .filter((framework) => framework.length > 0),
+  );
+
+  return expectedFrameworks.some((framework) => frameworkSet.has(framework));
+}
+
+function matchesFilters(metadata: Record<string, unknown>, filters: MemorySearchFilters): boolean {
+  if (filters.tags && filters.tags.length > 0) {
+    if (!includesAnyTag(metadata, filters.tags)) {
+      return false;
+    }
+  }
+
+  if (typeof filters.source === "string" && metadata.source !== filters.source) {
+    return false;
+  }
+
+  if (typeof filters.project_name === "string" && metadata.projectName !== filters.project_name) {
+    return false;
+  }
+
+  if (typeof filters.project_type === "string" && metadata.projectType !== filters.project_type) {
+    return false;
+  }
+
+  if (
+    typeof filters.primary_language === "string" &&
+    metadata.primaryLanguage !== filters.primary_language
+  ) {
+    return false;
+  }
+
+  if (
+    Array.isArray(filters.frameworks) &&
+    filters.frameworks.length > 0 &&
+    !includesAnyFramework(metadata, filters.frameworks)
+  ) {
+    return false;
+  }
+
+  if (filters.created_after !== undefined || filters.created_before !== undefined) {
+    const createdAtEpoch = toEpochMs(metadata.created_at);
+    if (createdAtEpoch === null) {
+      return false;
+    }
+
+    if (typeof filters.created_after === "number" && !(createdAtEpoch > filters.created_after)) {
+      return false;
+    }
+
+    if (typeof filters.created_before === "number" && !(createdAtEpoch < filters.created_before)) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 export class VectorStoreAdapter {
@@ -87,8 +201,7 @@ export class VectorStoreAdapter {
     const storagePath = resolve(this.projectRoot, this.config.db_path);
     const configuredMetric = this.config.vector_metric;
     // The NAPI enum expects TitleCase variants (e.g. "Cosine") in this project version.
-    const coreMetric =
-      configuredMetric === "cosine" ? ("Cosine" as const) : "Cosine";
+    const coreMetric = configuredMetric === "cosine" ? ("Cosine" as const) : "Cosine";
     this.db = new module.VectorDb({
       dimensions: this.config.vector_dimensions,
       storagePath,
@@ -146,10 +259,7 @@ export class VectorStoreAdapter {
       };
     }
 
-    const vector = embedTextDeterministic(
-      content,
-      this.config.vector_dimensions,
-    );
+    const vector = embedTextDeterministic(content, this.config.vector_dimensions);
     const id = await db.insert({
       vector,
       // Some @ruvector/core builds require metadata to be a string; store JSON.
@@ -166,6 +276,7 @@ export class VectorStoreAdapter {
   public async search(
     query: string,
     limit = 5,
+    filters?: MemorySearchFilters,
   ): Promise<ToolResponse<MemorySearchResult>> {
     const db = await this.getDbOrNull();
     if (!db) {
@@ -177,22 +288,91 @@ export class VectorStoreAdapter {
       };
     }
 
+    const normalizedLimit = Math.max(1, Math.floor(limit));
+    const hasFilters = Boolean(filters && Object.keys(filters).length > 0);
+    const searchK = hasFilters
+      ? Math.max(normalizedLimit, Math.floor(normalizedLimit * FILTER_OVERSAMPLE_FACTOR))
+      : normalizedLimit;
+
     const vector = embedTextDeterministic(query, this.config.vector_dimensions);
-    const results = await db.search({ vector, k: limit });
-    // In this project build, score behaves like distance for cosine (lower is better).
-    const sorted = [...results].sort((a, b) => a.score - b.score);
+    const results = await db.search({ vector, k: searchK });
+    const now = Date.now();
+
+    const scored = results.map((r) => {
+      const metadata = parseMetadata(r.metadata) ?? {};
+
+      const createdAtValue = toEpochMs(metadata.created_at);
+      const ageMs = createdAtValue !== null && createdAtValue >= 0 ? now - createdAtValue : null;
+
+      let priorityBoost = 0;
+      const priority = metadata.priority;
+      if (priority === "critical") {
+        priorityBoost = PRIORITY_BOOST_CRITICAL;
+      } else if (priority === "low") {
+        priorityBoost = -PRIORITY_PENALTY_LOW;
+      }
+
+      let recencyBoost = 0;
+      if (ageMs !== null) {
+        const ageDays = ageMs / (1000 * 60 * 60 * 24);
+        if (ageDays < 1) {
+          recencyBoost = RECENCY_BOOST_DAY;
+        } else if (ageDays < 7) {
+          recencyBoost = RECENCY_BOOST_WEEK;
+        }
+      }
+
+      const rawConfidence =
+        typeof metadata.confidence === "number" && Number.isFinite(metadata.confidence)
+          ? metadata.confidence
+          : 0.5;
+      const normalizedConfidence = Math.max(0, Math.min(1, rawConfidence));
+      // Confidence is centered at 0.5 so legacy memories (without confidence)
+      // keep neutral ordering while higher confidence is preferred.
+      const confidenceBoost = (normalizedConfidence - 0.5) * CONFIDENCE_SCALE;
+
+      // Composite distance: base vector distance adjusted by metadata signals.
+      // Lower composite score is still "better" for ranking.
+      const compositeScore = r.score - priorityBoost - recencyBoost - confidenceBoost;
+
+      return {
+        raw: r,
+        metadata,
+        compositeScore,
+      };
+    });
+
+    const activeFilters = hasFilters ? filters : undefined;
+    const filtered = activeFilters
+      ? scored.filter((entry) => matchesFilters(entry.metadata, activeFilters))
+      : scored;
+    const sorted = filtered.sort((a, b) => a.compositeScore - b.compositeScore);
+
     return {
       success: true,
       data: {
-        items: sorted.map((r) => ({
-          id: r.id,
-          score: r.score,
-          content:
-            typeof parseMetadata(r.metadata)?.content === "string"
-              ? (parseMetadata(r.metadata)?.content as string)
-              : undefined,
-          metadata: parseMetadata(r.metadata),
-        })),
+        /**
+         * Each item contains:
+         * - id: UUID assigned at insert time
+         * - score: composite distance (lower = more relevant); used by formatter to compute relevance
+         * - content: original text stored via memory_save()
+         * - metadata: full parsed metadata object with all fields saved by memory_save:
+         *     created_at, source, tags, priority, confidence, accessCount,
+         *     positiveFeedbackCount, negativeFeedbackCount, projectContext, importance
+         */
+        items: sorted.slice(0, normalizedLimit).map((entry) => {
+          const content =
+            typeof entry.metadata.content === "string"
+              ? (entry.metadata.content as string)
+              : undefined;
+
+          return {
+            id: entry.raw.id,
+            score: entry.compositeScore,
+            ...(content !== undefined && { content }),
+            metadata: entry.metadata,
+          };
+        }),
       },
     };
   }
