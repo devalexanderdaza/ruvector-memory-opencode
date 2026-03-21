@@ -13,7 +13,11 @@
  * - Include performance metadata (_meta) for observability
  */
 
-import type { MemorySearchResponse, MemorySearchResult, SearchResult } from "../shared/types.js";
+import type {
+  MemorySearchResponse,
+  MemorySearchResult,
+  SearchResult,
+} from "../shared/types.js";
 import { computeConfidence } from "../vector/confidence-calculator.js";
 
 /**
@@ -83,7 +87,10 @@ function formatSearchResult(item: {
 
   // Extract and validate required fields
   const id = item.id ?? "";
-  const content = typeof metadata.content === "string" ? metadata.content : (item.content ?? "");
+  const content =
+    typeof metadata.content === "string"
+      ? metadata.content
+      : (item.content ?? "");
   const timestamp = ensureIso8601(metadata.created_at);
   const source = (() => {
     const s = metadata.source;
@@ -131,7 +138,9 @@ function formatSearchResult(item: {
 
   const frameworks = Array.isArray(metadata.frameworks)
     ? metadata.frameworks
-        .filter((framework): framework is string => typeof framework === "string")
+        .filter(
+          (framework): framework is string => typeof framework === "string",
+        )
         .map((framework) => framework.trim())
         .filter((framework) => framework.length > 0)
     : undefined;
@@ -152,11 +161,16 @@ function formatSearchResult(item: {
     isDuplicate: (metadata.mergedIntoId as string | undefined) !== undefined,
   });
 
-  const explicitConfidence = typeof metadata.confidence === "number" && Number.isFinite(metadata.confidence)
-    ? metadata.confidence
-    : undefined;
+  const explicitConfidence =
+    typeof metadata.confidence === "number" &&
+    Number.isFinite(metadata.confidence)
+      ? metadata.confidence
+      : undefined;
 
-  const confidence = explicitConfidence !== undefined ? explicitConfidence : calculatedConfidence;
+  const confidence =
+    explicitConfidence !== undefined
+      ? explicitConfidence
+      : calculatedConfidence;
 
   return {
     id,
@@ -175,7 +189,9 @@ function formatSearchResult(item: {
     // An empty array means "detected, no known frameworks" which is distinct
     // from undefined ("metadata absent").
     ...(frameworks !== undefined && { frameworks }),
-    ...(metadata.mergedIntoId !== undefined && { mergedIntoId: metadata.mergedIntoId as string }),
+    ...(metadata.mergedIntoId !== undefined && {
+      mergedIntoId: metadata.mergedIntoId as string,
+    }),
   };
 }
 
@@ -195,11 +211,22 @@ export function formatSearchResults(
   queryLatencyMs = 0,
 ): MemorySearchResponse {
   if (!searchResults || !Array.isArray(searchResults.items)) {
-    throw new Error("Invalid search results structure: missing items array");
+    return {
+      success: true,
+      results: [],
+      count: 0,
+      _meta: {
+        query: query ?? "",
+        timestamp: new Date().toISOString(),
+        queryLatencyMs: Math.max(0, queryLatencyMs),
+      },
+    };
   }
 
   // Format each result
-  const formatted: SearchResult[] = searchResults.items.map((item) => formatSearchResult(item));
+  const formatted: SearchResult[] = searchResults.items.map((item) =>
+    formatSearchResult(item),
+  );
 
   // Sort by relevance descending
   formatted.sort((a, b) => b.relevance - a.relevance);

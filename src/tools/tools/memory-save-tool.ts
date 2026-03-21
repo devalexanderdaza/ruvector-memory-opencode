@@ -3,7 +3,20 @@ import {
   getVectorStoreAdapterForTools,
   initializeMemoryOnFirstOperation,
 } from "../../core/plugin.js";
-import type { MemorySaveInput, MemorySaveResult, ToolResponse } from "../../shared/types.js";
+import type {
+  MemorySaveInput,
+  MemorySaveResult,
+  ToolResponse,
+} from "../../shared/types.js";
+
+type PriorityLevel = "critical" | "normal" | "low";
+
+type MemoryMetadata = {
+  tags: string[];
+  source: string;
+  priority: PriorityLevel;
+  confidence: number;
+};
 
 function parseContent(input?: unknown): string | null {
   if (typeof input === "string") {
@@ -18,13 +31,8 @@ function parseContent(input?: unknown): string | null {
   return null;
 }
 
-function buildMetadata(input: unknown): Record<string, unknown> {
-  const base: {
-    tags: string[];
-    source: string;
-    priority: "critical" | "normal" | "low";
-    confidence: number;
-  } = {
+function buildMetadata(input: unknown): MemoryMetadata {
+  const base: MemoryMetadata = {
     tags: [],
     source: "unknown",
     priority: "normal",
@@ -55,7 +63,10 @@ function buildMetadata(input: unknown): Record<string, unknown> {
     base.priority = candidate.priority;
   }
 
-  if (typeof candidate.confidence === "number" && Number.isFinite(candidate.confidence)) {
+  if (
+    typeof candidate.confidence === "number" &&
+    Number.isFinite(candidate.confidence)
+  ) {
     // Clamp confidence to [-1.0, 1.0] so ranking remains bounded and deterministic.
     base.confidence = Math.max(-1.0, Math.min(1.0, candidate.confidence));
   }
@@ -70,6 +81,7 @@ function buildProjectMetadata(detected: {
   primaryLanguage: string;
   frameworks: string[];
   stackSignals: string[];
+  priority: PriorityLevel;
 }): Record<string, unknown> {
   return {
     projectContext: detected.projectName,
@@ -79,13 +91,21 @@ function buildProjectMetadata(detected: {
     frameworks: [...detected.frameworks],
     stackSignals: [...detected.stackSignals],
     projectRoot: detected.projectRoot,
+    importance:
+      detected.priority === "critical"
+        ? 5
+        : detected.priority === "low"
+          ? 1
+          : 3,
   };
 }
 
 export function createMemorySaveTool(): (
   input?: unknown,
 ) => Promise<ToolResponse<MemorySaveResult>> {
-  return async function memory_save(input?: unknown): Promise<ToolResponse<MemorySaveResult>> {
+  return async function memory_save(
+    input?: unknown,
+  ): Promise<ToolResponse<MemorySaveResult>> {
     const content = parseContent(input);
     if (!content) {
       return {
@@ -114,7 +134,10 @@ export function createMemorySaveTool(): (
     try {
       const metadata = buildMetadata(input);
       const detectedProjectContext = await ensureProjectContextForTools();
-      const projectMetadata = buildProjectMetadata(detectedProjectContext);
+      const projectMetadata = buildProjectMetadata({
+        ...detectedProjectContext,
+        priority: metadata.priority,
+      });
 
       return await store.save(content, {
         ...metadata,

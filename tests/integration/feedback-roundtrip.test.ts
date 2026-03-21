@@ -142,6 +142,9 @@ describe("Feedback round-trip integration", () => {
     const { activation, memorySave, memoryLearn } = await activateAndGet();
     expect(activation.success).toBe(true);
 
+    const canonicalSave = await memorySave({ content: "canonical representative" });
+    const canonicalId = canonicalSave.data.id;
+
     const saveResult = await memorySave({ content: "multi-type feedback memory" });
     expect(saveResult.success).toBe(true);
     const memoryId = saveResult.data.id as string;
@@ -151,7 +154,7 @@ describe("Feedback round-trip integration", () => {
     const finalResult = await memoryLearn({
       memory_id: memoryId,
       feedback_type: "duplicate",
-      canonical_id: "ffffffff-ffff-ffff-ffff-ffffffffffff",
+      canonical_id: canonicalId,
     });
 
     expect(finalResult.success).toBe(true);

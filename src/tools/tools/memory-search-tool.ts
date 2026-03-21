@@ -257,13 +257,14 @@ export function createMemorySearchTool(): (
       // Asynchronously update accessCount and confidence for all retrieved items
       const updateTasks = storeResult.data.items.map(async (item) => {
         try {
-          const meta = (item.metadata as Record<string, unknown>) ?? {};
-          const currentAccess = typeof meta.accessCount === "number" && Number.isFinite(meta.accessCount) ? meta.accessCount : 0;
-          const pos = typeof meta.positiveFeedbackCount === "number" && Number.isFinite(meta.positiveFeedbackCount) ? meta.positiveFeedbackCount : 0;
-          const neg = typeof meta.negativeFeedbackCount === "number" && Number.isFinite(meta.negativeFeedbackCount) ? meta.negativeFeedbackCount : 0;
+          const itemMetadata = typeof item.metadata === "string" ? JSON.parse(item.metadata) : (item.metadata || {});
+          
+          const currentAccess = typeof itemMetadata.accessCount === "number" && Number.isFinite(itemMetadata.accessCount) ? itemMetadata.accessCount : 0;
+          const pos = typeof itemMetadata.positiveFeedbackCount === "number" && Number.isFinite(itemMetadata.positiveFeedbackCount) ? itemMetadata.positiveFeedbackCount : 0;
+          const neg = typeof itemMetadata.negativeFeedbackCount === "number" && Number.isFinite(itemMetadata.negativeFeedbackCount) ? itemMetadata.negativeFeedbackCount : 0;
           
           const newAccessCount = currentAccess + 1;
-          const isDuplicate = meta.mergedIntoId !== undefined;
+          const isDuplicate = itemMetadata.mergedIntoId !== undefined;
           const newConfidence = computeConfidence({
             accessCount: newAccessCount,
             positiveFeedbackCount: pos,

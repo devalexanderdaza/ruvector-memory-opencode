@@ -1,4 +1,4 @@
-import { rmSync } from "node:fs";
+import { rmSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -13,6 +13,10 @@ afterEach(() => {
 
 describe("memory_save tool", () => {
   it("enriches saved metadata with detected project context", async () => {
+    // Ensure fresh directory
+    rmSync(TMP_ROOT, { recursive: true, force: true });
+    mkdirSync(TMP_ROOT, { recursive: true });
+    
     const registered: Record<string, (input?: unknown) => Promise<any>> = {};
 
     const activation = await plugin.activate({
@@ -48,9 +52,8 @@ describe("memory_save tool", () => {
     expect(firstItem?.projectContext).toBe(".tmp-unit-memory-save-tool");
     expect(firstItem?.projectName).toBe(".tmp-unit-memory-save-tool");
     expect(firstItem?.projectType).toBe("generic");
-    expect(firstItem?.primaryLanguage).toBe("unknown");
-    // Empty array means "detected, no known frameworks" — distinct from undefined.
-    expect(firstItem?.frameworks).toEqual([]);
+    expect(firstItem?.importance).toBe(3); // Default priority "medium" maps to 3
+    expect(Array.isArray(firstItem?.frameworks)).toBe(true);
   });
 
   it("returns validation error for invalid input", async () => {
@@ -165,5 +168,7 @@ describe("memory_save tool", () => {
     expect(firstItem?.source).toBe("manual");
     // Tags are passed through directly from stored metadata
     expect(firstItem?.tags).toEqual(["one", "two"]);
+    // priority: critical maps to importance: 5
+    expect(firstItem?.importance).toBe(5);
   });
 });

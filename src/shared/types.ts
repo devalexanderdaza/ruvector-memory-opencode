@@ -253,3 +253,11 @@ export interface MemoryFeedbackResult {
   merged_into_id?: string | undefined;
 }
 
+/** Specific error codes for feedback logic. */
+export enum FeedbackErrorCode {
+  CANONICAL_NOT_FOUND = "CANONICAL_NOT_FOUND",
+  MEMORY_NOT_FOUND = "MEMORY_NOT_FOUND",
+  INVALID_FEEDBACK_TYPE = "INVALID_FEEDBACK_TYPE",
+  MISSING_CANONICAL_ID = "MISSING_CANONICAL_ID",
+}
+

@@ -71,11 +71,15 @@ describe("registered tool handlers", () => {
       code: "PLUGIN_NOT_ACTIVATED",
     });
 
-    // Learn tool is now implemented; Zod validation runs before plugin checks,
-    // so invalid input ("z" is not a valid object) → INVALID_FEEDBACK_TYPE.
+    // Learn tool is now implemented; Zod validation runs before plugin checks.
+    // Input "z" fails object validation and should return a structured validation code.
     expect(learnResult).toMatchObject({
       success: false,
-      code: "INVALID_FEEDBACK_TYPE",
+      reason: "validation",
     });
+    const learnErrorCode = (learnResult as { code?: string }).code;
+    expect(["INVALID_FEEDBACK_INPUT", "INVALID_MEMORY_ID"]).toContain(
+      learnErrorCode,
+    );
   });
 });

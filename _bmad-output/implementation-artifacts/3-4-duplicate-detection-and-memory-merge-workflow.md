@@ -1,6 +1,6 @@
 # Story 3.4: Duplicate Detection and Memory Merge Workflow
 
-Status: review
+Status: done
 
 ## Story Foundation
 
@@ -19,7 +19,7 @@ Status: review
 - [x] Task 3: Update `MemoryFeedbackInput` and `MemoryFeedbackResult` types
 - [x] Task 4: Ensure duplicate records are auditable (via `mergedIntoId` in search results)
 - [x] Task 5: Add integration tests for duplicate detection and merging
-- [x] Task 6: Address code review findings (see _bmad-output/review-findings.md)
+- [x] Task 6: Address code review findings (see \_bmad-output/review-findings.md)
 
 ## Developer Context & Guardrails
 
@@ -85,9 +85,13 @@ Antigravity (Gemini 2.5 Pro)
 - `src/shared/types.ts`
 - `src/vector/confidence-calculator.ts`
 - `src/tools/tools/memory-learn-tool.ts`
+- `src/tools/tools/memory-save-tool.ts`
+- `src/tools/tools/memory-search-tool.ts`
 - `src/tools/memory-response-formatter.ts`
 - `tests/integration/duplicate-merge.test.ts`
 - `tests/integration/feedback-roundtrip.test.ts`
+- `tests/unit/tools/memory-learn-tool.test.ts`
+- `tests/unit/tools/tool-injector.test.ts`
 
 ### Change Log
 
@@ -95,6 +99,15 @@ Antigravity (Gemini 2.5 Pro)
 - **2026-03-21**: Added `canonical_id` to feedback tool and linkage in metadata.
 - **2026-03-21**: Updated confidence formula to prioritize duplicate flag.
 - **2026-03-21**: Fixed regression in `feedback-roundtrip.test.ts`.
+- **2026-03-21**: Applied review remediations: graceful formatter fallback, stricter feedback validation codes, and typed metadata handling in `memory_save`.
+
+## Senior Developer Review (AI)
+
+- Review outcome: **Changes Requested** issues were fixed in this pass.
+- HIGH fix: removed throw path from formatter by returning an empty successful response shape when search payload is malformed.
+- MEDIUM fix: removed `any` casts from `memory_save` metadata/project importance mapping.
+- MEDIUM fix: refined feedback validation codes (`INVALID_MEMORY_ID`, `INVALID_FEEDBACK_TYPE`, `MISSING_CANONICAL_ID`, `INVALID_FEEDBACK_INPUT`) and aligned unit assertions.
+- Documentation sync: updated this story `File List` and `Change Log` to match current implementation artifacts.
 
 ## Project Context Reference
 

@@ -36,14 +36,14 @@ async function activateAndGet() {
 }
 
 describe("memory_learn_from_feedback tool – validation", () => {
-  it("returns INVALID_FEEDBACK_TYPE when input is undefined", async () => {
+  it("returns INVALID_FEEDBACK_INPUT when input is undefined", async () => {
     const { activation, memoryLearn } = await activateAndGet();
     expect(activation.success).toBe(true);
 
     const result = await memoryLearn(undefined);
     expect(result).toMatchObject({
       success: false,
-      code: "INVALID_FEEDBACK_TYPE",
+      code: "INVALID_FEEDBACK_INPUT",
       reason: "validation",
     });
   });
@@ -63,19 +63,19 @@ describe("memory_learn_from_feedback tool – validation", () => {
     });
   });
 
-  it("returns INVALID_FEEDBACK_TYPE when memory_id is missing", async () => {
+  it("returns INVALID_MEMORY_ID when memory_id is missing", async () => {
     const { activation, memoryLearn } = await activateAndGet();
     expect(activation.success).toBe(true);
 
     const result = await memoryLearn({ feedback_type: "helpful" });
     expect(result).toMatchObject({
       success: false,
-      code: "INVALID_FEEDBACK_TYPE",
+      code: "INVALID_MEMORY_ID",
       reason: "validation",
     });
   });
 
-  it("returns INVALID_FEEDBACK_TYPE when memory_id is an empty string", async () => {
+  it("returns INVALID_MEMORY_ID when memory_id is an empty string", async () => {
     const { activation, memoryLearn } = await activateAndGet();
     expect(activation.success).toBe(true);
 
@@ -85,7 +85,7 @@ describe("memory_learn_from_feedback tool – validation", () => {
     });
     expect(result).toMatchObject({
       success: false,
-      code: "INVALID_FEEDBACK_TYPE",
+      code: "INVALID_MEMORY_ID",
       reason: "validation",
     });
   });
@@ -109,11 +109,15 @@ describe("memory_learn_from_feedback tool – not found", () => {
 
 describe("memory_learn_from_feedback tool – happy path", () => {
   it("records 'helpful' feedback and increments positiveFeedbackCount", async () => {
-    const { activation, memorySave, memoryLearn, memorySearch } = await activateAndGet();
+    const { activation, memorySave, memoryLearn, memorySearch } =
+      await activateAndGet();
     expect(activation.success).toBe(true);
 
     // Save a memory and get its id.
-    const saveResult = await memorySave({ content: "helpful memory content", tags: ["learn"] });
+    const saveResult = await memorySave({
+      content: "helpful memory content",
+      tags: ["learn"],
+    });
     expect(saveResult.success).toBe(true);
     const memoryId = saveResult.data.id as string;
 
@@ -134,9 +138,11 @@ describe("memory_learn_from_feedback tool – happy path", () => {
       );
     }
 
-
     // Verify the update is persisted by searching (inspect via raw search).
-    const searchResult = await memorySearch({ query: "helpful memory content", limit: 1 });
+    const searchResult = await memorySearch({
+      query: "helpful memory content",
+      limit: 1,
+    });
     expect(searchResult.success).toBe(true);
   });
 
@@ -186,19 +192,27 @@ describe("memory_learn_from_feedback tool – happy path", () => {
     const { activation, memorySave, memoryLearn } = await activateAndGet();
     expect(activation.success).toBe(true);
 
-    const saveResult = await memorySave({ content: "duplicate memory" });
-    expect(saveResult.success).toBe(true);
-    const memoryId = saveResult.data.id as string;
+    // Save a memory that will act as the canonical version
+    const canonicalSave = await memorySave({ content: "canonical memory" });
+    expect(canonicalSave.success).toBe(true);
+    const canonicalId = (canonicalSave.data as any).id;
+
+    // Save a memory that will be marked as duplicate
+    const duplicateSave = await memorySave({ content: "duplicate memory" });
+    expect(duplicateSave.success).toBe(true);
+    const memoryId = (duplicateSave.data as any).id;
 
     const feedbackResult = await memoryLearn({
       memory_id: memoryId,
       feedback_type: "duplicate",
-      canonical_id: "fake-canonical-id",
+      canonical_id: canonicalId,
     });
+
     expect(feedbackResult.success).toBe(true);
     if (feedbackResult.success) {
       expect(feedbackResult.data.feedback_type).toBe("duplicate");
       expect(feedbackResult.data.total_feedback_count).toBe(1);
+      expect(feedbackResult.data.merged_into_id).toBe(canonicalId);
     }
   });
 
@@ -246,7 +260,9 @@ describe("memory_learn_from_feedback tool – happy path", () => {
     const { activation, memorySave, memoryLearn } = await activateAndGet();
     expect(activation.success).toBe(true);
 
-    const saveResult = await memorySave({ content: "confidence formula memory" });
+    const saveResult = await memorySave({
+      content: "confidence formula memory",
+    });
     expect(saveResult.success).toBe(true);
     const memoryId = saveResult.data.id as string;
 
