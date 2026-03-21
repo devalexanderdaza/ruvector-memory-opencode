@@ -2,6 +2,8 @@ import type { PluginActivationContext, ToolResponse } from "../shared/types.js";
 import { logger } from "../shared/logger.js";
 
 import { createMemoryLearnTool } from "./tools/memory-learn-tool.js";
+import { createMemoryLearningAuditHistoryTool } from "./tools/memory-learning-audit-history-tool.js";
+import { createMemoryLearningMetricsTool } from "./tools/memory-learning-metrics-tool.js";
 import { createMemorySaveTool } from "./tools/memory-save-tool.js";
 import { createMemorySearchTool } from "./tools/memory-search-tool.js";
 
@@ -32,9 +34,23 @@ export function injectTools(context: PluginActivationContext = {}): {
   registry.registerTool("memory_save", createMemorySaveTool());
   registry.registerTool("memory_search", createMemorySearchTool());
   registry.registerTool("memory_learn_from_feedback", createMemoryLearnTool());
+  registry.registerTool(
+    "memory_learning_metrics",
+    createMemoryLearningMetricsTool(),
+  );
+  registry.registerTool(
+    "memory_learning_audit_history",
+    createMemoryLearningAuditHistoryTool(),
+  );
 
   logger.info("tools_registered", {
-    tools: ["memory_save", "memory_search", "memory_learn_from_feedback"],
+    tools: [
+      "memory_save",
+      "memory_search",
+      "memory_learn_from_feedback",
+      "memory_learning_metrics",
+      "memory_learning_audit_history",
+    ],
   });
 
   return { registered: true };

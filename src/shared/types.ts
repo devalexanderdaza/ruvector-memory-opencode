@@ -253,6 +253,44 @@ export interface MemoryFeedbackResult {
   merged_into_id?: string | undefined;
 }
 
+export interface LearningMetricsInput {
+  lookback_days?: number;
+  sample_limit?: number;
+}
+
+export interface LearningMetricsResult {
+  hit_rate: number;
+  helpful_feedback_count: number;
+  negative_feedback_count: number;
+  total_feedback_count: number;
+  feedback_trend: "up" | "down" | "stable" | "insufficient_data";
+  trend_delta: number;
+  learning_velocity_per_day: number;
+  learning_velocity_window_days: number;
+  evaluated_memory_count: number;
+  sampled_memory_count: number;
+}
+
+export interface LearningAuditHistoryInput {
+  limit?: number;
+  memory_id?: string;
+}
+
+export interface LearningAuditHistoryEvent {
+  actor: string;
+  action: FeedbackType;
+  memory_id: string;
+  timestamp: string;
+  context?: string;
+}
+
+export interface LearningAuditHistoryResult {
+  events: LearningAuditHistoryEvent[];
+  count: number;
+  limit: number;
+  sampled_memory_count: number;
+}
+
 /** Specific error codes for feedback logic. */
 export enum FeedbackErrorCode {
   CANONICAL_NOT_FOUND = "CANONICAL_NOT_FOUND",
@@ -260,4 +298,3 @@ export enum FeedbackErrorCode {
   INVALID_FEEDBACK_TYPE = "INVALID_FEEDBACK_TYPE",
   MISSING_CANONICAL_ID = "MISSING_CANONICAL_ID",
 }
-

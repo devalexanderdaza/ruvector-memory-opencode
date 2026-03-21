@@ -13,13 +13,15 @@ describe("injectTools", () => {
     });
 
     expect(result.registered).toBe(true);
-    expect(registerTool).toHaveBeenCalledTimes(3);
+    expect(registerTool).toHaveBeenCalledTimes(5);
 
     const registeredNames = registerTool.mock.calls.map((call) => call[0]);
     expect(registeredNames).toEqual([
       "memory_save",
       "memory_search",
       "memory_learn_from_feedback",
+      "memory_learning_metrics",
+      "memory_learning_audit_history",
     ]);
 
     for (const call of registerTool.mock.calls) {
@@ -51,14 +53,20 @@ describe("registered tool handlers", () => {
     const save = handlersByName.get("memory_save");
     const search = handlersByName.get("memory_search");
     const learn = handlersByName.get("memory_learn_from_feedback");
+    const metrics = handlersByName.get("memory_learning_metrics");
+    const auditHistory = handlersByName.get("memory_learning_audit_history");
 
     expect(save).toBeTypeOf("function");
     expect(search).toBeTypeOf("function");
     expect(learn).toBeTypeOf("function");
+    expect(metrics).toBeTypeOf("function");
+    expect(auditHistory).toBeTypeOf("function");
 
     const saveResult = await save?.("x");
     const searchResult = await search?.("y");
     const learnResult = await learn?.("z");
+    const metricsResult = await metrics?.("q");
+    const auditHistoryResult = await auditHistory?.("h");
 
     // Save/search require activation + DB init (Story 1.5), so without activation we should
     // see activation-related structured errors.
@@ -81,5 +89,15 @@ describe("registered tool handlers", () => {
     expect(["INVALID_FEEDBACK_INPUT", "INVALID_MEMORY_ID"]).toContain(
       learnErrorCode,
     );
+    expect(metricsResult).toMatchObject({
+      success: false,
+      code: "EINVALID",
+      reason: "validation",
+    });
+    expect(auditHistoryResult).toMatchObject({
+      success: false,
+      code: "EINVALID",
+      reason: "validation",
+    });
   });
 });

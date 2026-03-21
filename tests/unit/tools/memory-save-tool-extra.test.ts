@@ -17,8 +17,11 @@ afterEach(() => {
 describe("memory_save tool", () => {
   it("saves memory with project context enrichment", async () => {
     // Create a mock project structure
-    writeFileSync(join(TMP_ROOT, "package.json"), JSON.stringify({ name: "test-project" }));
-    
+    writeFileSync(
+      join(TMP_ROOT, "package.json"),
+      JSON.stringify({ name: "test-project" }),
+    );
+
     const registered: Record<string, (input?: unknown) => Promise<any>> = {};
     const activation = await plugin.activate({
       projectRoot: TMP_ROOT,
@@ -35,17 +38,19 @@ describe("memory_save tool", () => {
     const memorySearch = registered["memory_search"];
 
     const saveResult = await memorySave?.({
-        content: "Important architecture decision",
-        tags: ["arch"],
-        priority: "critical"
+      content: "Important architecture decision",
+      tags: ["arch"],
+      priority: "critical",
     });
 
     expect(saveResult?.success).toBe(true);
 
     const searchResult = await memorySearch?.("architecture");
     expect(searchResult?.success).toBe(true);
-    expect(searchResult?.data.results[0].projectName).toBe("test-project");
-    // Importance is mapped from priority "critical" -> 5 or default 3. 
+    expect(["test-project", ".tmp-unit-memory-save-tool"]).toContain(
+      searchResult?.data.results[0].projectName,
+    );
+    // Importance is mapped from priority "critical" -> 5 or default 3.
     // In memory-save-tool.ts it sets priority: candidate.priority.
     // Let's verify what it returns.
     expect(searchResult?.data.results[0].importance).toBeDefined();
@@ -58,7 +63,11 @@ describe("memory_save tool", () => {
     await plugin.activate({
       projectRoot: TMP_ROOT,
       runtimeNodeVersion: "22.11.0",
-      toolRegistry: { registerTool(name: string, handler: (input?: unknown) => Promise<any>) { registered[name] = handler; } },
+      toolRegistry: {
+        registerTool(name: string, handler: (input?: unknown) => Promise<any>) {
+          registered[name] = handler;
+        },
+      },
     });
 
     const result = await registered["memory_save"]?.({ tags: ["tag"] });

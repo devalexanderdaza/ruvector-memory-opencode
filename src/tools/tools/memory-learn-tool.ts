@@ -303,6 +303,10 @@ export function createMemoryLearnTool(): (
     let policyTriggered = false;
     let impactedMemoryIds: string[] = [];
     let policyRationale = "";
+    const feedbackTimestamp = new Date().toISOString();
+    const feedbackActor = source?.trim() || "agent";
+    const compactContext =
+      typeof context === "string" ? context.trim().replace(/;/g, ",") : "";
 
     const updateResult = await vectorStore.updateMetadata(
       memory_id,
@@ -368,7 +372,7 @@ export function createMemoryLearnTool(): (
           incorrectCount: newIncorrect,
           outdatedCount: newOutdated,
           confidence: newConfidence,
-          lastFeedbackAt: new Date().toISOString(),
+          lastFeedbackAt: feedbackTimestamp,
           patternKey,
           patternCategory: feedback_type,
           patternSource: sourceForPattern,
@@ -376,6 +380,23 @@ export function createMemoryLearnTool(): (
           patternThreshold: PATTERN_DEPRIORITIZATION_THRESHOLD,
           patternAutoDeprioritized: policyTriggered,
         };
+        const existingHistoryRaw = metadata["feedbackHistory"];
+        const existingHistory = Array.isArray(existingHistoryRaw)
+          ? existingHistoryRaw.filter(
+              (entry): entry is string => typeof entry === "string",
+            )
+          : [];
+        const nextHistoryEntry = [
+          `ts=${feedbackTimestamp}`,
+          `actor=${feedbackActor}`,
+          `action=${feedback_type}`,
+          `memory_id=${memory_id}`,
+          ...(compactContext.length > 0 ? [`context=${compactContext}`] : []),
+        ].join(";");
+        updatedMetadata["feedbackHistory"] = [
+          ...existingHistory,
+          nextHistoryEntry,
+        ];
         if (policyTriggered) {
           updatedMetadata["patternDeprioritizedAt"] = new Date().toISOString();
           updatedMetadata["patternRationale"] = policyRationale;
@@ -484,6 +505,13 @@ export function createMemoryLearnTool(): (
       previous_confidence: prevConfidence,
       new_confidence: newConfidence,
       total_feedback: totalFeedback,
+    });
+    logger.info("feedback_audit_recorded", {
+      actor: feedbackActor,
+      action: feedback_type,
+      memory_id,
+      timestamp: feedbackTimestamp,
+      has_context: compactContext.length > 0 ? "true" : "false",
     });
 
     return {

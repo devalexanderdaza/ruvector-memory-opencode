@@ -32,6 +32,8 @@ async function activateAndGet() {
     memorySave: registered["memory_save"]!,
     memoryLearn: registered["memory_learn_from_feedback"]!,
     memorySearch: registered["memory_search"]!,
+    memoryMetrics: registered["memory_learning_metrics"]!,
+    memoryAuditHistory: registered["memory_learning_audit_history"]!,
   };
 }
 
@@ -376,6 +378,141 @@ describe("memory_learn_from_feedback tool – happy path", () => {
     expect(helpfulAfterDuplicate.success).toBe(true);
     if (helpfulAfterDuplicate.success) {
       expect(helpfulAfterDuplicate.data.new_confidence).toBe(-1.0);
+    }
+  });
+});
+
+describe("learning metrics and audit history tools", () => {
+  it("returns validation errors for malformed metrics/audit inputs", async () => {
+    const { activation, memoryMetrics, memoryAuditHistory } =
+      await activateAndGet();
+    expect(activation.success).toBe(true);
+
+    const metrics = await memoryMetrics("not-an-object");
+    const history = await memoryAuditHistory("not-an-object");
+
+    expect(metrics).toMatchObject({
+      success: false,
+      code: "EINVALID",
+      reason: "validation",
+    });
+    expect(history).toMatchObject({
+      success: false,
+      code: "EINVALID",
+      reason: "validation",
+    });
+  });
+
+  it("returns bounded defaults and insufficient trend for sparse data", async () => {
+    const { activation, memoryMetrics } = await activateAndGet();
+    expect(activation.success).toBe(true);
+
+    const metrics = await memoryMetrics({
+      lookback_days: 9999,
+      sample_limit: -4,
+    });
+    expect(metrics.success).toBe(true);
+    if (metrics.success) {
+      expect(metrics.data.learning_velocity_window_days).toBe(365);
+      expect(metrics.data.sampled_memory_count).toBeGreaterThanOrEqual(0);
+      expect(metrics.data.feedback_trend).toBe("insufficient_data");
+      expect(metrics.data.hit_rate).toBeGreaterThanOrEqual(0);
+      expect(metrics.data.hit_rate).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("returns deterministic metrics for the same feedback dataset", async () => {
+    const { activation, memorySave, memoryLearn, memoryMetrics } =
+      await activateAndGet();
+    expect(activation.success).toBe(true);
+
+    const baseline = await memoryMetrics({
+      lookback_days: 30,
+      sample_limit: 50,
+    });
+    expect(baseline.success).toBe(true);
+    const baselineTotal = baseline.success
+      ? baseline.data.total_feedback_count
+      : 0;
+    const baselineHelpful = baseline.success
+      ? baseline.data.helpful_feedback_count
+      : 0;
+    const baselineNegative = baseline.success
+      ? baseline.data.negative_feedback_count
+      : 0;
+
+    const saveResult = await memorySave({
+      content: "metrics deterministic memory",
+    });
+    expect(saveResult.success).toBe(true);
+    const memoryId = saveResult.success ? saveResult.data.id : "";
+
+    await memoryLearn({ memory_id: memoryId, feedback_type: "helpful" });
+    await memoryLearn({ memory_id: memoryId, feedback_type: "incorrect" });
+    await memoryLearn({ memory_id: memoryId, feedback_type: "helpful" });
+
+    const first = await memoryMetrics({ lookback_days: 30, sample_limit: 50 });
+    const second = await memoryMetrics({ lookback_days: 30, sample_limit: 50 });
+
+    expect(first.success).toBe(true);
+    expect(second.success).toBe(true);
+    if (first.success && second.success) {
+      expect(first.data).toEqual(second.data);
+      expect(first.data.total_feedback_count - baselineTotal).toBe(3);
+      expect(first.data.helpful_feedback_count - baselineHelpful).toBe(2);
+      expect(first.data.negative_feedback_count - baselineNegative).toBe(1);
+      const deltaHelpful = first.data.helpful_feedback_count - baselineHelpful;
+      const deltaTotal = first.data.total_feedback_count - baselineTotal;
+      expect(deltaHelpful / deltaTotal).toBeCloseTo(2 / 3, 6);
+    }
+  });
+
+  it("returns audit history records with who/what/when fields", async () => {
+    const { activation, memorySave, memoryLearn, memoryAuditHistory } =
+      await activateAndGet();
+    expect(activation.success).toBe(true);
+
+    const saveResult = await memorySave({ content: "audit trail memory" });
+    expect(saveResult.success).toBe(true);
+    const memoryId = saveResult.success ? saveResult.data.id : "";
+
+    await memoryLearn({
+      memory_id: memoryId,
+      feedback_type: "outdated",
+      source: "unit-test-actor",
+      context: "stale data path",
+    });
+
+    const history = await memoryAuditHistory({
+      limit: 10,
+      memory_id: memoryId,
+    });
+    expect(history.success).toBe(true);
+    if (history.success) {
+      expect(history.data.count).toBeGreaterThanOrEqual(1);
+      const firstEvent = history.data.events[0];
+      expect(firstEvent).toBeDefined();
+      expect(firstEvent?.actor).toBe("unit-test-actor");
+      expect(firstEvent?.action).toBe("outdated");
+      expect(firstEvent?.memory_id).toBe(memoryId);
+      expect(typeof firstEvent?.timestamp).toBe("string");
+      expect(Date.parse(firstEvent?.timestamp ?? "")).not.toBeNaN();
+    }
+  });
+
+  it("returns empty audit history when memory filter does not match", async () => {
+    const { activation, memoryAuditHistory } = await activateAndGet();
+    expect(activation.success).toBe(true);
+
+    const history = await memoryAuditHistory({
+      limit: 3,
+      memory_id: "non-existent-memory-id",
+    });
+    expect(history.success).toBe(true);
+    if (history.success) {
+      expect(history.data.count).toBe(0);
+      expect(history.data.events).toEqual([]);
+      expect(history.data.limit).toBe(3);
     }
   });
 });
