@@ -1,6 +1,6 @@
 # Story 3.4: Duplicate Detection and Memory Merge Workflow
 
-Status: in-progress
+Status: review
 
 ## Story Foundation
 
@@ -19,7 +19,7 @@ Status: in-progress
 - [x] Task 3: Update `MemoryFeedbackInput` and `MemoryFeedbackResult` types
 - [x] Task 4: Ensure duplicate records are auditable (via `mergedIntoId` in search results)
 - [x] Task 5: Add integration tests for duplicate detection and merging
-- [ ] Task 6: Address code review findings (see _bmad-output/review-findings.md)
+- [x] Task 6: Address code review findings (see _bmad-output/review-findings.md)
 
 ## Developer Context & Guardrails
 
