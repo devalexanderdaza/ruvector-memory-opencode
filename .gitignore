@@ -7,7 +7,7 @@ coverage/
 *.tsbuildinfo
 
 # Runtime/temp
-.tmp-test-workspace/
+.tmp-*
 *.log
 .opencode/metrics.json
 .opencode/ruvector_memory.db
