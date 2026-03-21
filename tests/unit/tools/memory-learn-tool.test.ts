@@ -193,6 +193,7 @@ describe("memory_learn_from_feedback tool – happy path", () => {
     const feedbackResult = await memoryLearn({
       memory_id: memoryId,
       feedback_type: "duplicate",
+      canonical_id: "fake-canonical-id",
     });
     expect(feedbackResult.success).toBe(true);
     if (feedbackResult.success) {
