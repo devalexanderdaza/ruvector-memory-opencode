@@ -65,7 +65,7 @@ development_status:
 
   # Epic 3: Continuous Learning with Control and Auditability
   epic-3: in-progress
-  3-1-structured-feedback-capture-for-memories: review
+  3-1-structured-feedback-capture-for-memories: done
   3-2-positive-feedback-reinforcement: backlog
   3-3-negative-feedback-deprioritization: backlog
   3-4-duplicate-detection-and-memory-merge-workflow: backlog
