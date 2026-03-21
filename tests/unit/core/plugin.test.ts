@@ -86,4 +86,22 @@ describe("activatePlugin", () => {
     const state = getPluginState();
     expect(state.degraded).toBe(true);
   });
+
+  it("getDetectedProjectContext returns deep copies", async () => {
+    const activation = await activatePlugin({ runtimeNodeVersion: "22.0.0" });
+    expect(activation.success).toBe(true);
+
+    const { getDetectedProjectContext, ensureProjectContextForTools } = await import("../../../src/core/plugin.js");
+    
+    // Ensure context is populated
+    await ensureProjectContextForTools();
+    
+    const context1 = getDetectedProjectContext();
+    expect(context1).not.toBeNull();
+    
+    // Modify the copy and check original
+    context1!.frameworks.push("new-framework");
+    const context2 = getDetectedProjectContext();
+    expect(context2!.frameworks).not.toContain("new-framework");
+  });
 });

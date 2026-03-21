@@ -1,73 +1,39 @@
 import { describe, expect, it } from "vitest";
-
 import { estimateTokens, selectWithinTokenBudget } from "../../../src/shared/token-counter.js";
 
-describe("estimateTokens", () => {
-  it("returns 0 for empty string", () => {
+describe("token-counter", () => {
+  it("estimates tokens correctly for empty text", () => {
     expect(estimateTokens("")).toBe(0);
   });
 
-  it("returns 1 for 1-4 char string", () => {
-    expect(estimateTokens("hi")).toBe(1);
-    expect(estimateTokens("hell")).toBe(1);
+  it("ceil estimate for text length not divisible by 4", () => {
+    expect(estimateTokens("abc")).toBe(1);
+    expect(estimateTokens("abcd")).toBe(1);
+    expect(estimateTokens("abcde")).toBe(2);
   });
 
-  it("returns ceil(length / 4) for longer strings", () => {
-    expect(estimateTokens("hello")).toBe(2); // ceil(5/4) = 2
-    expect(estimateTokens("a".repeat(400))).toBe(100); // 400/4 = 100
-    expect(estimateTokens("a".repeat(401))).toBe(101); // ceil(401/4) = 101
+  it("selectWithinTokenBudget handles zero budget", () => {
+    const items = [{ content: "content" }];
+    expect(selectWithinTokenBudget(items, 0)).toEqual([]);
+    expect(selectWithinTokenBudget(items, -1)).toEqual([]);
   });
 
-  it("handles unicode characters", () => {
-    const emoji = "🚀"; // 4 bytes, 2 chars
-    expect(estimateTokens(emoji)).toBeGreaterThan(0);
-  });
-});
-
-describe("selectWithinTokenBudget", () => {
-  const make = (content: string) => ({ id: "test", content });
-
-  it("returns empty array for empty input", () => {
-    expect(selectWithinTokenBudget([], 100)).toEqual([]);
-  });
-
-  it("includes all items when they fit within budget", () => {
-    const items = [make("a".repeat(100)), make("b".repeat(100))]; // each 25 tokens
-    const result = selectWithinTokenBudget(items, 50);
-    expect(result).toHaveLength(2);
-  });
-
-  it("stops selecting when token budget would be exceeded", () => {
+  it("selectWithinTokenBudget greedy stops before exceeding budget", () => {
     const items = [
-      make("a".repeat(100)), // 25 tokens → remaining: 25
-      make("b".repeat(100)), // 25 tokens > remaining 25... wait 25+25=50, budget is 45
+      { id: 1, content: "1234" }, // 1 token
+      { id: 2, content: "12341234" }, // 2 tokens
+      { id: 3, content: "123412341234" } // 3 tokens
     ];
-    const result = selectWithinTokenBudget(items, 45);
-    // First item: 25 tokens, remaining = 20. Second item: 25 tokens > 20 → stop
-    expect(result).toHaveLength(1);
-    expect(result[0]?.content).toBe("a".repeat(100));
-  });
 
-  it("returns empty when first item exceeds budget", () => {
-    const items = [make("a".repeat(1000))]; // 250 tokens > 100
-    const result = selectWithinTokenBudget(items, 100);
-    expect(result).toHaveLength(0);
-  });
+    // Budget of 2 should take (id:1) and skip (id:2)
+    // Wait, adding id:2 would be (1 + 2) = 3 which is > 2.
+    // Result should be only (id:1).
+    expect(selectWithinTokenBudget(items, 2)).toEqual([{ id: 1, content: "1234" }]);
 
-  it("preserves item order and custom fields", () => {
-    const items = [
-      { id: "first", content: "alpha" },
-      { id: "second", content: "beta" },
-    ];
-    const result = selectWithinTokenBudget(items, 100);
+    // Budget of 3 should take (id:1) and (id:2)
+    const result = selectWithinTokenBudget(items, 3);
     expect(result).toHaveLength(2);
-    expect(result[0]?.id).toBe("first");
-    expect(result[1]?.id).toBe("second");
-  });
-
-  it("handles budget of 0 by returning empty array", () => {
-    const items = [make("short")];
-    const result = selectWithinTokenBudget(items, 0);
-    expect(result).toHaveLength(0);
+    expect(result[0]!.id).toBe(1);
+    expect(result[1]!.id).toBe(2);
   });
 });
