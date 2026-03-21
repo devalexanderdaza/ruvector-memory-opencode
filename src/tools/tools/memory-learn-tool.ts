@@ -304,7 +304,7 @@ export function createMemoryLearnTool(): (
     let impactedMemoryIds: string[] = [];
     let policyRationale = "";
     const feedbackTimestamp = new Date().toISOString();
-    const feedbackActor = source?.trim() || "agent";
+    const feedbackActor = (source?.trim() || "agent").replace(/;/g, ",");
     const compactContext =
       typeof context === "string" ? context.trim().replace(/;/g, ",") : "";
 

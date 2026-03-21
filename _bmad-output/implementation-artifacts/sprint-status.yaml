@@ -70,7 +70,7 @@ development_status:
   3-3-negative-feedback-deprioritization: done
   3-4-duplicate-detection-and-memory-merge-workflow: done
   3-5-pattern-level-auto-deprioritization: done
-  3-6-learning-metrics-and-audit-history: review
+  3-6-learning-metrics-and-audit-history: done
   epic-3-retrospective: optional
 
   # Epic 4: Knowledge Portability and Collaboration

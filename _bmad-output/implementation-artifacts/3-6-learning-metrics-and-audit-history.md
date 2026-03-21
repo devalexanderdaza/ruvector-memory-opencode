@@ -1,6 +1,6 @@
 # Story 3.6: Learning Metrics and Audit History
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -168,3 +168,5 @@ gpt-5.3-codex-low
 - **2026-03-21**: Implemented deterministic metrics aggregation and auditable feedback history retrieval on top of existing persisted metadata.
 - **2026-03-21**: Extended feedback persistence with flat history entries and structured audit logging event.
 - **2026-03-21**: Added unit/integration tests and regression-safe assertions; validated with full test suite.
+- **2026-03-21**: [Code Review] Fixed audit history lookup bug to use direct `getById` when memory ID provided.
+- **2026-03-21**: [Code Review] Added sanitization for semicolons in feedback source/context to prevent history corruption.

@@ -35,7 +35,7 @@ function parseInput(input?: unknown): {
     candidate.memory_id.trim().length > 0
       ? candidate.memory_id.trim()
       : undefined;
-  return { limit, memoryId };
+  return { limit, ...(memoryId ? { memoryId } : {}) };
 }
 
 function parseMetadataRecord(value: unknown): Record<string, unknown> {
@@ -123,13 +123,38 @@ export function createMemoryLearningAuditHistoryTool(): (
     }
 
     const sampleLimit = Math.max(parsed.limit, DEFAULT_SAMPLE_LIMIT);
-    const sampled = await store.search("", sampleLimit);
-    if (!sampled.success) {
-      return sampled as ToolResponse<LearningAuditHistoryResult>;
+    let items: any[] = [];
+    let totalSampledCount = 0;
+
+    if (parsed.memoryId) {
+      const result = await store.getById(parsed.memoryId);
+      if (result.success) {
+        items = [result.data];
+        totalSampledCount = 1;
+      } else if (result.code === "MEMORY_NOT_FOUND") {
+        return {
+          success: true,
+          data: {
+            events: [],
+            count: 0,
+            limit: parsed.limit,
+            sampled_memory_count: 0,
+          },
+        };
+      } else {
+        return result as ToolResponse<LearningAuditHistoryResult>;
+      }
+    } else {
+      const sampled = await store.search("", sampleLimit);
+      if (!sampled.success) {
+        return sampled as ToolResponse<LearningAuditHistoryResult>;
+      }
+      items = sampled.data.items;
+      totalSampledCount = items.length;
     }
 
     const events: LearningAuditHistoryEvent[] = [];
-    for (const item of sampled.data.items) {
+    for (const item of items) {
       const metadata = parseMetadataRecord(item.metadata);
       const historyRaw = metadata["feedbackHistory"] as unknown;
       if (!Array.isArray(historyRaw)) {
@@ -159,7 +184,7 @@ export function createMemoryLearningAuditHistoryTool(): (
         events: trimmed,
         count: trimmed.length,
         limit: parsed.limit,
-        sampled_memory_count: sampled.data.items.length,
+        sampled_memory_count: totalSampledCount,
       },
     };
   };

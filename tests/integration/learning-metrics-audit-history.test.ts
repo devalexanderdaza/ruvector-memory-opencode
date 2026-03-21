@@ -88,17 +88,43 @@ describe("Learning metrics and audit history integration", () => {
     expect(history.success).toBe(true);
     if (history.success) {
       expect(history.data.count).toBeGreaterThanOrEqual(3);
-      const actors = history.data.events.map((event) => event.actor);
-      const actions = history.data.events.map((event) => event.action);
+      const actors = history.data.events.map((event: any) => event.actor);
+      const actions = history.data.events.map((event: any) => event.action);
       expect(actors).toContain("integration-user");
       expect(actors).toContain("integration-reviewer");
       expect(actions).toContain("helpful");
       expect(actions).toContain("incorrect");
       for (const event of history.data.events) {
-        expect(typeof event.memory_id).toBe("string");
-        expect(event.memory_id.length).toBeGreaterThan(0);
-        expect(Date.parse(event.timestamp)).not.toBeNaN();
+        expect(typeof (event as any).memory_id).toBe("string");
+        expect((event as any).memory_id.length).toBeGreaterThan(0);
+        expect(Date.parse((event as any).timestamp)).not.toBeNaN();
       }
+    }
+
+    // Test direct lookup of specific memory history
+    const directHistory = await memoryAuditHistory({ memory_id: firstId });
+    expect(directHistory.success).toBe(true);
+    if (directHistory.success) {
+      // Should have 2 events for firstId (helpful, incorrect)
+      expect(directHistory.data.count).toBe(2);
+      expect(directHistory.data.events.every((e: any) => e.memory_id === firstId)).toBe(true);
+    }
+
+    // Test sanitization of semicolons in source
+    const trickyId = (await memorySave({ content: "tricky source memory" })).data.id;
+    await memoryLearn({
+      memory_id: trickyId,
+      feedback_type: "helpful",
+      source: "bad;actor;name",
+      context: "context;with;semicolons"
+    });
+    
+    const trickyHistory = await memoryAuditHistory({ memory_id: trickyId });
+    expect(trickyHistory.success).toBe(true);
+    if (trickyHistory.success) {
+      const event = trickyHistory.data.events[0];
+      expect(event.actor).toBe("bad,actor,name");
+      expect(event.context).toBe("context,with,semicolons");
     }
   });
 });
