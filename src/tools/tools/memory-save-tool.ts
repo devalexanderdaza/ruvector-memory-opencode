@@ -28,7 +28,7 @@ function buildMetadata(input: unknown): Record<string, unknown> {
     tags: [],
     source: "unknown",
     priority: "normal",
-    confidence: 0.5,
+    confidence: 0.0,
   };
 
   if (!input || typeof input !== "object") {
@@ -56,8 +56,8 @@ function buildMetadata(input: unknown): Record<string, unknown> {
   }
 
   if (typeof candidate.confidence === "number" && Number.isFinite(candidate.confidence)) {
-    // Clamp confidence to [0, 1] so ranking remains bounded and deterministic.
-    base.confidence = Math.max(0, Math.min(1, candidate.confidence));
+    // Clamp confidence to [-1.0, 1.0] so ranking remains bounded and deterministic.
+    base.confidence = Math.max(-1.0, Math.min(1.0, candidate.confidence));
   }
 
   return base;

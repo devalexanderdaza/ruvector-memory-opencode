@@ -326,11 +326,11 @@ export class VectorStoreAdapter {
       const rawConfidence =
         typeof metadata.confidence === "number" && Number.isFinite(metadata.confidence)
           ? metadata.confidence
-          : 0.5;
-      const normalizedConfidence = Math.max(0, Math.min(1, rawConfidence));
-      // Confidence is centered at 0.5 so legacy memories (without confidence)
-      // keep neutral ordering while higher confidence is preferred.
-      const confidenceBoost = (normalizedConfidence - 0.5) * CONFIDENCE_SCALE;
+          : 0.0;
+      const clampedConfidence = Math.max(-1.0, Math.min(1.0, rawConfidence));
+      // Confidence is centered at 0.0 so legacy memories (without confidence)
+      // keep neutral ordering while higher confidence is preferred and negative is penalized.
+      const confidenceBoost = clampedConfidence * CONFIDENCE_SCALE;
 
       // Composite distance: base vector distance adjusted by metadata signals.
       // Lower composite score is still "better" for ranking.
