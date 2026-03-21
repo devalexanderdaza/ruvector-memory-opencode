@@ -322,7 +322,7 @@ describe("Memory Response Formatter", () => {
       const result = formatSearchResults(input as any);
       const confidence = result.results[0]?.confidence;
 
-      expect(confidence).toBeCloseTo(0.8);
+      expect(confidence).toBeCloseTo(0.7);
     });
 
     it("handles multiple results with different metadata", () => {

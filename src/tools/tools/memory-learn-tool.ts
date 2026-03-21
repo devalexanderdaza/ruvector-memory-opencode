@@ -110,12 +110,21 @@ export function createMemoryLearnTool(): (
 
       // Note: feedback does NOT increment accessCount. Only memory_search (agent-context reads)
       // counts as an "access" for the confidence formula. Feedback is a separate signal.
+      let newIncorrect = parseCounter(metadata["incorrectCount"]);
+      let newOutdated = parseCounter(metadata["outdatedCount"]);
+
       switch (feedback_type as FeedbackType) {
         case "helpful":
           newPos += 1;
           break;
         case "incorrect":
+          newNeg += 1;
+          newIncorrect += 1;
+          break;
         case "outdated":
+          newNeg += 1;
+          newOutdated += 1;
+          break;
         case "duplicate":
           newNeg += 1;
           break;
@@ -132,15 +141,22 @@ export function createMemoryLearnTool(): (
         ...metadata,
         positiveFeedbackCount: newPos,
         negativeFeedbackCount: newNeg,
+        incorrectCount: newIncorrect,
+        outdatedCount: newOutdated,
         confidence: newConfidence,
         lastFeedbackAt: new Date().toISOString(),
       };
 
       if (source !== undefined) {
         updatedMetadata["feedbackSource"] = source;
+      } else {
+        delete updatedMetadata["feedbackSource"];
       }
+
       if (context !== undefined) {
         updatedMetadata["feedbackContext"] = context;
+      } else {
+        delete updatedMetadata["feedbackContext"];
       }
       
       return updatedMetadata;

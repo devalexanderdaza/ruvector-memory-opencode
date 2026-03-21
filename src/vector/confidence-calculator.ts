@@ -46,14 +46,23 @@ export function computeConfidence(memory: MemoryWithFeedback): number {
   // Normalize access count: cap at 10 accesses
   const normalizeAccessCount = Math.min(accessCount / 10, 1.0);
 
-  // Calculate feedback score
-  const totalFeedback = positiveFeedback + negativeFeedback;
-  const feedbackScore =
-    totalFeedback > 0
-      ? (positiveFeedback - negativeFeedback) / totalFeedback
-      : 0;
+  // Auto-deprioritize completely if 3 or more negative reports (FR16 threshold)
+  if (negativeFeedback >= 3) {
+    return -1.0;
+  }
 
-  // Compute weighted average
+  // Calculate feedback score
+  // Policy: Negative feedback is significantly more powerful than positive feedback.
+  // This ensures that "incorrect" or "outdated" reports lead to rapid deprioritization.
+  const totalFeedback = positiveFeedback + negativeFeedback;
+  let feedbackScore = 0;
+  if (totalFeedback > 0) {
+    // Progressive penalty weight based on number of negative feedbacks
+    const negWeight = 1 + (negativeFeedback * 0.5); // 1 neg -> 1.5x, 2 neg -> 2.0x
+    feedbackScore = (positiveFeedback - negWeight * negativeFeedback) / totalFeedback;
+  }
+
+  // Compute weighted average: access history + feedback signals
   const confidence = 0.5 * normalizeAccessCount + 0.5 * feedbackScore;
 
   // Clamp to [-1.0, 1.0]

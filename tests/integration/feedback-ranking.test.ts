@@ -112,4 +112,61 @@ describe("Feedback Ranking Integration", () => {
       expect(finalB!.confidence).toBeGreaterThan(0.5);
     }
   });
+
+  it("memory receiving incorrect/outdated feedback ranks lower than clean or helpful memories", async () => {
+    const { activation, memorySave, memoryLearn, memorySearch } = await activateAndGet();
+    expect(activation.success).toBe(true);
+
+    const phrase = "The cache policy is set to LRU with 100MB limit.";
+
+    // Save Memory A (will receive incorrect feedback)
+    const saveA = await memorySave({ content: phrase });
+    expect(saveA.success).toBe(true);
+    const idA = saveA.success ? saveA.data.id : "";
+
+    // Save Memory B (will stay clean)
+    const saveB = await memorySave({ content: phrase });
+    expect(saveB.success).toBe(true);
+    const idB = saveB.success ? saveB.data.id : "";
+
+    // Save Memory C (will receive positive feedback)
+    const saveC = await memorySave({ content: phrase });
+    expect(saveC.success).toBe(true);
+    const idC = saveC.success ? saveC.data.id : "";
+
+    // Step 1: Baseline trust (Initial searches to establish access count)
+    await memorySearch({ query: "cache policy" });
+    await new Promise((r) => setTimeout(r, 100)); // wait for async access count
+
+    // Step 2: Favor Memory C
+    await memoryLearn({ memory_id: idC, feedback_type: "helpful" });
+
+    // Step 3: Flag Memory A as incorrect
+    await memoryLearn({ memory_id: idA, feedback_type: "incorrect" });
+
+    // Step 4: Final Search
+    const finalSearch = await memorySearch({ query: "cache policy" });
+    expect(finalSearch.success).toBe(true);
+    if (!finalSearch.success) return;
+
+    const results = finalSearch.data.results;
+    const rankA = results.findIndex(r => r.id === idA);
+    const rankB = results.findIndex(r => r.id === idB);
+    const rankC = results.findIndex(r => r.id === idC);
+
+    // Expected order: C (helpful) > B (clean/neutral) > A (incorrect)
+    expect(rankC).toBeLessThan(rankB);
+    expect(rankB).toBeLessThan(rankA);
+
+    // Verify confidence scores reflect the deprioritization
+    const confidenceA = results.find(r => r.id === idA)?.confidence || 0;
+    const confidenceB = results.find(r => r.id === idB)?.confidence || 0;
+    const confidenceC = results.find(r => r.id === idC)?.confidence || 0;
+
+    expect(confidenceC).toBeGreaterThan(confidenceB);
+    expect(confidenceB).toBeGreaterThan(confidenceA);
+    
+    // A should definitely have negative confidence due to the penalty
+    expect(confidenceA).toBeLessThan(0.0);
+  });
 });
