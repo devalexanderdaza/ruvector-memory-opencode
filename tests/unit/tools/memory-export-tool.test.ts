@@ -73,4 +73,36 @@ describe("memory_export tool unit tests", () => {
       expect(result.data.file_path).toBe(outputPath);
     }
   });
+
+  it("supports include_vectors=false with valid payload", async () => {
+    await activatePlugin({ projectRoot: TMP_TOOL_DIR });
+
+    const tool = createMemoryExportTool();
+    const outputPath = join(TMP_TOOL_DIR, "no-vectors-export.rvf");
+    const result = await tool({
+      output_path: outputPath,
+      include_vectors: false,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.file_path).toBe(outputPath);
+    }
+  });
+
+  it("rejects unknown keys due to strict schema", async () => {
+    await activatePlugin({ projectRoot: TMP_TOOL_DIR });
+
+    const tool = createMemoryExportTool();
+    const result = await tool({
+      output_path: join(TMP_TOOL_DIR, "unknown-key.rvf"),
+      unexpected_key: true,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.code).toBe("INVALID_INPUT");
+      expect(result.reason).toBe("validation");
+    }
+  });
 });

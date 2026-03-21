@@ -29,4 +29,17 @@ describe("logger", () => {
     expect(payload).toContain('"event":"plugin_failure"');
     expect(payload).toContain('"level":"error"');
   });
+
+  it("omits metadata field when not provided", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
+
+    logger.info("startup_complete");
+
+    expect(infoSpy).toHaveBeenCalledTimes(1);
+    const firstCall = infoSpy.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    const payload = String(firstCall?.[0]);
+    expect(payload).toContain('"event":"startup_complete"');
+    expect(payload).not.toContain('"metadata"');
+  });
 });

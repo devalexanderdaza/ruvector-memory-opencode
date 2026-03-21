@@ -193,6 +193,140 @@ describe("rvf-exporter", () => {
     }
   });
 
+  it("serializes Float32Array vectors and excludes non-matching filtered memories", async () => {
+    const outputPath = join(TMP_TEST_DIR, "float32-filtered.rvf");
+
+    const mockAdapter = {
+      listAll: vi.fn().mockResolvedValue({
+        success: true,
+        data: {
+          entries: [
+            {
+              id: "10",
+              vector: new Float32Array([0.11, 0.22]),
+              metadata: { content: "kept", source: "manual", tags: ["k"] },
+            },
+            {
+              id: "20",
+              vector: [0.33, 0.44],
+              metadata: { content: "dropped-source", source: "agent", tags: ["k"] },
+            },
+            {
+              id: "30",
+              vector: [0.55, 0.66],
+              metadata: { content: "dropped-tags", source: "manual", tags: "not-array" },
+            },
+          ],
+        },
+      }),
+    } as any;
+
+    const result = await exportMemories({
+      adapter: mockAdapter,
+      outputPath,
+      projectName: "test-project",
+      vectorDimensions: 128,
+      filters: {
+        source: "manual",
+        tags: ["k"],
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.memory_count).toBe(1);
+      const lines = readFileSync(outputPath, "utf8").trim().split("\n");
+      const entryLine = lines[1];
+      if (!entryLine) throw new Error("Entry line missing");
+      const entry = JSON.parse(entryLine);
+      expect(entry.id).toBe("10");
+      expect(entry.vector).toHaveLength(2);
+      expect(entry.vector[0]).toBeCloseTo(0.11, 5);
+      expect(entry.vector[1]).toBeCloseTo(0.22, 5);
+    }
+  });
+
+  it("exports zero entries when filters do not match any memory", async () => {
+    const outputPath = join(TMP_TEST_DIR, "no-match.rvf");
+
+    const mockAdapter = {
+      listAll: vi.fn().mockResolvedValue({
+        success: true,
+        data: {
+          entries: [
+            {
+              id: "x",
+              vector: [0.1, 0.2],
+              metadata: { content: "x", source: "agent", tags: ["t"] },
+            },
+          ],
+        },
+      }),
+    } as any;
+
+    const result = await exportMemories({
+      adapter: mockAdapter,
+      outputPath,
+      projectName: "test-project",
+      vectorDimensions: 128,
+      filters: {
+        source: "manual",
+        tags: ["missing"],
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.memory_count).toBe(0);
+      const lines = readFileSync(outputPath, "utf8").trim().split("\n");
+      expect(lines).toHaveLength(1);
+    }
+  });
+
+  it("respects explicit export timestamp and include_vectors=false", async () => {
+    const outputPath = join(TMP_TEST_DIR, "no-vectors.rvf");
+
+    const mockAdapter = {
+      listAll: vi.fn().mockResolvedValue({
+        success: true,
+        data: {
+          entries: [
+            {
+              id: "1",
+              vector: [0.1, 0.2],
+              metadata: { content: "a", source: "manual" },
+            },
+          ],
+        },
+      }),
+    } as any;
+
+    const explicitTimestamp = "2026-03-21T00:00:00.000Z";
+    const result = await exportMemories({
+      adapter: mockAdapter,
+      outputPath,
+      projectName: "test-project",
+      vectorDimensions: 128,
+      exportTimestamp: explicitTimestamp,
+      includeVectors: false,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const lines = readFileSync(outputPath, "utf8").trim().split("\n");
+      const manifestLine = lines[0];
+      if (!manifestLine) throw new Error("Manifest line missing");
+      const manifest = JSON.parse(manifestLine);
+      expect(manifest.export_timestamp).toBe(explicitTimestamp);
+
+      const entryLine = lines[1];
+      if (!entryLine) throw new Error("Entry line missing");
+      const entry = JSON.parse(entryLine);
+      expect(entry.vector).toBeUndefined();
+      expect(entry.metadata.content).toBe("a");
+    }
+  });
+
   it("fails if adapter.listAll fails", async () => {
     const mockAdapter = {
       listAll: vi.fn().mockResolvedValue({
@@ -236,6 +370,14 @@ describe("rvf-exporter", () => {
       const validation = validateRvfFormat(p);
       expect(validation.valid).toBe(false);
       expect(validation.error).toBeDefined();
+    });
+
+    it("rejects empty files", () => {
+      const p = join(TMP_TEST_DIR, "empty.rvf");
+      writeFileSync(p, "");
+      const validation = validateRvfFormat(p);
+      expect(validation.valid).toBe(false);
+      expect(validation.error).toContain("Empty file");
     });
 
     it("rejects corruption in middle entries", () => {
@@ -288,6 +430,91 @@ describe("rvf-exporter", () => {
       const validation = validateRvfFormat(p);
       expect(validation.valid).toBe(false);
       expect(validation.error).toContain("memory_count");
+    });
+
+    it("rejects invalid manifest shape", () => {
+      const p = join(TMP_TEST_DIR, "invalid-manifest-shape.rvf");
+      writeFileSync(
+        p,
+        JSON.stringify({
+          format_version: RVF_FORMAT_VERSION,
+          export_timestamp: "2026-03-21T00:00:00.000Z",
+          source_project: "p",
+          memory_count: "1",
+          vector_dimensions: 2,
+        }),
+      );
+      const validation = validateRvfFormat(p);
+      expect(validation.valid).toBe(false);
+      expect(validation.error).toContain("Invalid manifest structure");
+    });
+
+    it("rejects entry with non-object metadata", () => {
+      const p = join(TMP_TEST_DIR, "invalid-metadata.rvf");
+      writeFileSync(
+        p,
+        [
+          JSON.stringify({
+            format_version: RVF_FORMAT_VERSION,
+            export_timestamp: "2026-03-21T00:00:00.000Z",
+            source_project: "p",
+            memory_count: 1,
+            vector_dimensions: 2,
+          }),
+          JSON.stringify({ id: "a", vector: [0.1, 0.2], metadata: "bad" }),
+        ].join("\n"),
+      );
+      const validation = validateRvfFormat(p);
+      expect(validation.valid).toBe(false);
+      expect(validation.error).toContain("Invalid entry");
+    });
+
+    it("rejects files with blank entry lines", () => {
+      const p = join(TMP_TEST_DIR, "blank-entry-line.rvf");
+      writeFileSync(
+        p,
+        [
+          JSON.stringify({
+            format_version: RVF_FORMAT_VERSION,
+            export_timestamp: "2026-03-21T00:00:00.000Z",
+            source_project: "p",
+            memory_count: 2,
+            vector_dimensions: 2,
+          }),
+          JSON.stringify({ id: "a", vector: [0.1, 0.2], metadata: { ok: true } }),
+          "",
+        ].join("\n"),
+      );
+      const validation = validateRvfFormat(p);
+      expect(validation.valid).toBe(false);
+      expect(validation.error).toContain("memory_count");
+    });
+
+    it("rejects entry with missing vector when manifest has memories", () => {
+      const p = join(TMP_TEST_DIR, "missing-vector.rvf");
+      writeFileSync(
+        p,
+        [
+          JSON.stringify({
+            format_version: RVF_FORMAT_VERSION,
+            export_timestamp: "2026-03-21T00:00:00.000Z",
+            source_project: "p",
+            memory_count: 1,
+            vector_dimensions: 2,
+          }),
+          JSON.stringify({ id: "a", metadata: { ok: true } }),
+        ].join("\n"),
+      );
+      const validation = validateRvfFormat(p);
+      expect(validation.valid).toBe(false);
+      expect(validation.error).toContain("Invalid vector");
+    });
+
+    it("returns error when file path does not exist", () => {
+      const p = join(TMP_TEST_DIR, "does-not-exist.rvf");
+      const validation = validateRvfFormat(p);
+      expect(validation.valid).toBe(false);
+      expect(validation.error).toBeDefined();
     });
   });
 });

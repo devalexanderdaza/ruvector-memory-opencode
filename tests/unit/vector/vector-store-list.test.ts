@@ -112,4 +112,77 @@ describe("VectorStoreAdapter.listAll", () => {
       expect(result.reason).toBe("retrieval");
     }
   });
+
+  it("recovers full enumeration after multiple probe searches", async () => {
+    const root = join(TEST_ROOT, "multi-probe");
+    const adapter = createVectorStoreAdapter(DEFAULT_CONFIG, root) as any;
+
+    adapter.lastInitResult = {
+      success: true,
+      data: {
+        firstRun: false,
+        created: false,
+        dbPath: "mock",
+        initializationMs: 1,
+        databaseSize: 0,
+      },
+    };
+
+    let callCount = 0;
+    adapter.db = {
+      len: async () => 3,
+      search: async () => {
+        callCount += 1;
+        if (callCount === 1) {
+          return [{ id: "b", score: 0.2 }];
+        }
+        return [
+          { id: "a", score: 0.1 },
+          { id: "b", score: 0.2 },
+          { id: "c", score: 0.3 },
+        ];
+      },
+      get: async (id: string) => ({ id, vector: [0.1, 0.2], metadata: JSON.stringify({ content: id }) }),
+      insert: async () => "ignored",
+    };
+
+    const result = await adapter.listAll();
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.entries.map((e: any) => e.id)).toEqual(["a", "b", "c"]);
+    }
+    expect(callCount).toBeGreaterThan(1);
+  });
+
+  it("returns LIST_ALL_FAILED when db operations throw", async () => {
+    const root = join(TEST_ROOT, "throws");
+    const adapter = createVectorStoreAdapter(DEFAULT_CONFIG, root) as any;
+
+    adapter.lastInitResult = {
+      success: true,
+      data: {
+        firstRun: false,
+        created: false,
+        dbPath: "mock",
+        initializationMs: 1,
+        databaseSize: 0,
+      },
+    };
+
+    adapter.db = {
+      len: async () => {
+        throw new Error("len-failed");
+      },
+      search: async () => [],
+      get: async () => null,
+      insert: async () => "ignored",
+    };
+
+    const result = await adapter.listAll();
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.code).toBe("LIST_ALL_FAILED");
+      expect(result.error).toContain("len-failed");
+    }
+  });
 });
