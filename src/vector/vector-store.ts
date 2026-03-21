@@ -49,6 +49,7 @@ interface VectorDbLike {
     vector: Float32Array | number[];
     metadata?: unknown;
   } | null>;
+  len: () => Promise<number>;
 }
 
 function parseMetadata(metadata: unknown): Record<string, unknown> | undefined {
@@ -456,6 +457,56 @@ export class VectorStoreAdapter {
     });
 
     return { success: true, data: { id } };
+  }
+
+  public async listAll(): Promise<
+    ToolResponse<{
+      entries: Array<{ id: string; vector: Float32Array | number[]; metadata: Record<string, unknown> }>;
+    }>
+  > {
+    const db = await this.getDbOrNull();
+    if (!db) {
+      return {
+        success: false,
+        error: "Memory database is not ready",
+        code: "ENOTREADY",
+        reason: "initialization",
+      };
+    }
+
+    try {
+      const count = await db.len();
+      if (count === 0) {
+        return { success: true, data: { entries: [] } };
+      }
+
+      // To get all entries, we search with k equal to total count using a dummy zero vector.
+      // HNSW will return the k nearest neighbors, which in this case is everything.
+      const dummyVector = new Float32Array(this.config.vector_dimensions);
+      const results = await db.search({
+        vector: dummyVector,
+        k: count,
+      });
+
+      const entries = await Promise.all(
+        results.map(async (r) => {
+          const entry = await db.get(r.id);
+          return {
+            id: r.id,
+            vector: entry?.vector ?? new Float32Array(this.config.vector_dimensions),
+            metadata: parseMetadata(entry?.metadata) ?? {},
+          };
+        }),
+      );
+
+      return { success: true, data: { entries } };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error during listAll",
+        code: "LIST_ALL_FAILED",
+      };
+    }
   }
 
   public resetForTests(): void {

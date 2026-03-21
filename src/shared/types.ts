@@ -291,6 +291,40 @@ export interface LearningAuditHistoryResult {
   sampled_memory_count: number;
 }
 
+
+// ---------------------------------------------------------------------------
+// Export/Import types (Story 4.1)
+// ---------------------------------------------------------------------------
+
+/** Current version of the portable .rvf format. */
+export const RVF_FORMAT_VERSION = "1.0.0";
+
+/** Manifest header for the .rvf export file. */
+export interface RvfManifest {
+  format_version: string;
+  export_timestamp: string;
+  source_project: string;
+  memory_count: number;
+  vector_dimensions: number;
+}
+
+/** Input for the memory_export tool. */
+export interface MemoryExportInput {
+  /** Optional directory or full file path for the export. Defaults to .opencode/ */
+  output_path?: string;
+  /** Whether to include the high-dimensional vectors. Default: true */
+  include_vectors?: boolean;
+}
+
+/** Result returned by memory_export tool on success. */
+export interface MemoryExportResult {
+  file_path: string;
+  memory_count: number;
+  file_size_bytes: number;
+  export_timestamp: string;
+  format_version: string;
+}
+
 /** Specific error codes for feedback logic. */
 export enum FeedbackErrorCode {
   CANONICAL_NOT_FOUND = "CANONICAL_NOT_FOUND",
