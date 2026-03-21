@@ -9,6 +9,8 @@ import type {
   ToolResponse,
 } from "../../shared/types.js";
 import { formatSearchResults } from "../memory-response-formatter.js";
+import { logger } from "../../shared/logger.js";
+import { computeConfidence } from "../../vector/confidence-calculator.js";
 
 /** Hard cap on retrieved items to prevent resource-exhaustion via large k searches. */
 const MAX_SEARCH_LIMIT = 100;
@@ -251,6 +253,32 @@ export function createMemorySearchTool(): (
 
       // Format raw results into enriched response with confidence, source, etc.
       const enrichedResponse = formatSearchResults(storeResult.data, parsed.query, queryLatencyMs);
+
+      // Asynchronously update accessCount and confidence for all retrieved items
+      const updateTasks = storeResult.data.items.map(async (item) => {
+        try {
+          const meta = (item.metadata as Record<string, unknown>) ?? {};
+          const currentAccess = typeof meta.accessCount === "number" && Number.isFinite(meta.accessCount) ? meta.accessCount : 0;
+          const pos = typeof meta.positiveFeedbackCount === "number" && Number.isFinite(meta.positiveFeedbackCount) ? meta.positiveFeedbackCount : 0;
+          const neg = typeof meta.negativeFeedbackCount === "number" && Number.isFinite(meta.negativeFeedbackCount) ? meta.negativeFeedbackCount : 0;
+          
+          const newAccessCount = currentAccess + 1;
+          const newConfidence = computeConfidence({
+            accessCount: newAccessCount,
+            positiveFeedbackCount: pos,
+            negativeFeedbackCount: neg,
+          });
+
+          await store.updateMetadata(item.id, {
+            accessCount: newAccessCount,
+            confidence: newConfidence,
+            lastAccessedAt: new Date().toISOString(),
+          });
+        } catch (error) {
+          logger.error("access_count_update_failed", { id: item.id, error: String(error) });
+        }
+      });
+      Promise.all(updateTasks).catch(() => { /* fire and forget errors are logged individually */ });
 
       return {
         success: true,

@@ -95,5 +95,21 @@ describe("Feedback Ranking Integration", () => {
     const scoreB = results[rankB]!.relevance;
 
     expect(scoreB).toBeGreaterThan(scoreA);
+
+    // Verify structural confidence correctly reflects the feedback
+    expect(results[rankB]!.confidence).toBeGreaterThan(0.0);
+
+    // Wait for the background `accessCount` increment to complete from `postFeedbackSearch`
+    await new Promise((r) => setTimeout(r, 100));
+
+    // A subsequent search should reflect the automatically incremented accessCount along with the feedback.
+    const finalSearch = await memorySearch({ query: "database migrations asynchronously" });
+    expect(finalSearch.success).toBe(true);
+    if (finalSearch.success) {
+      const finalB = finalSearch.data.results.find(r => r.id === idB);
+      expect(finalB).toBeDefined();
+      // With at least 1 access and 1 positive feedback, confidence should exceed the theoretical 0.5 bound of feedback-only confidence
+      expect(finalB!.confidence).toBeGreaterThan(0.5);
+    }
   });
 });

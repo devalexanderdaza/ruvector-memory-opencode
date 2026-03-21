@@ -145,11 +145,17 @@ function formatSearchResult(item: {
   const relevance = Math.max(0, Math.min(1.0, 1.0 - vectorScore));
 
   // Calculate confidence from metadata
-  const confidence = computeConfidence({
+  const calculatedConfidence = computeConfidence({
     accessCount: metadata.accessCount as number | undefined,
     positiveFeedbackCount: metadata.positiveFeedbackCount as number | undefined,
     negativeFeedbackCount: metadata.negativeFeedbackCount as number | undefined,
   });
+
+  const explicitConfidence = typeof metadata.confidence === "number" && Number.isFinite(metadata.confidence)
+    ? metadata.confidence
+    : undefined;
+
+  const confidence = explicitConfidence !== undefined ? explicitConfidence : calculatedConfidence;
 
   return {
     id,

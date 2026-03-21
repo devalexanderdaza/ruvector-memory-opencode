@@ -419,7 +419,7 @@ export class VectorStoreAdapter {
 
   public async updateMetadata(
     id: string,
-    updatedMetadata: Record<string, unknown>,
+    metadataOverridesOrUpdater: Record<string, unknown> | ((existing: Record<string, unknown>) => Record<string, unknown>),
   ): Promise<ToolResponse<{ id: string }>> {
     const db = await this.getDbOrNull();
     if (!db) {
@@ -445,7 +445,9 @@ export class VectorStoreAdapter {
     // Re-insert with the same id and vector, merging metadata.
     // @ruvector/core insert with an explicit id performs an upsert.
     const existingMetadata = parseMetadata(existing.metadata) ?? {};
-    const merged = { ...existingMetadata, ...updatedMetadata };
+    const merged = typeof metadataOverridesOrUpdater === 'function' 
+      ? metadataOverridesOrUpdater(existingMetadata)
+      : { ...existingMetadata, ...metadataOverridesOrUpdater };
 
     await db.insert({
       id,

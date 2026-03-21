@@ -86,99 +86,84 @@ export function createMemoryLearnTool(): (
     }
 
     // ------------------------------------------------------------------
-    // 3. Retrieve existing memory entry
+    // 3. Atomically update the memory entry and recompute confidence
     // ------------------------------------------------------------------
-    const getResult = await vectorStore.getById(memory_id);
-    if (!getResult.success) {
-      logger.warn("feedback_memory_not_found", { memory_id });
-      return {
-        success: false,
-        error: getResult.error,
-        code: getResult.code ?? "MEMORY_NOT_FOUND",
-        reason: "not_found",
-      };
-    }
+    let prevConfidence = 0;
+    let newConfidence = 0;
+    let totalFeedback = 0;
 
-    // ------------------------------------------------------------------
-    // 4. Parse metadata (stored as a Record already after getById parses it)
-    // ------------------------------------------------------------------
-    const metadata = (getResult.data.metadata as Record<string, unknown>) ?? {};
-
-    const prevPos = Math.max(0, Number(metadata["positiveFeedbackCount"] ?? 0));
-    const prevNeg = Math.max(0, Number(metadata["negativeFeedbackCount"] ?? 0));
-    const access = Math.max(0, Number(metadata["accessCount"] ?? 0));
-    // Use typeof guard: null passes ?? 0 but would give Number(null)=0 instead of stored value.
-    const rawConf = metadata["confidence"];
-    const prevConfidence = typeof rawConf === "number" && isFinite(rawConf) ? rawConf : 0;
-
-    // ------------------------------------------------------------------
-    // 5. Increment the appropriate counter
-    // ------------------------------------------------------------------
-    let newPos = prevPos;
-    let newNeg = prevNeg;
-
-    // Note: feedback does NOT increment accessCount. Only memory_search (agent-context reads)
-    // counts as an "access" for the confidence formula. Feedback is a separate signal.
-    switch (feedback_type as FeedbackType) {
-      case "helpful":
-        newPos += 1;
-        break;
-      case "incorrect":
-      case "outdated":
-      case "duplicate":
-        newNeg += 1;
-        break;
-    }
-
-    // ------------------------------------------------------------------
-    // 6. Recompute confidence
-    // ------------------------------------------------------------------
-    const newConfidence = computeConfidence({
-      accessCount: access,
-      positiveFeedbackCount: newPos,
-      negativeFeedbackCount: newNeg,
-    });
-
-    // ------------------------------------------------------------------
-    // 7. Merge updated fields into metadata
-    // ------------------------------------------------------------------
-    const updatedMetadata: Record<string, unknown> = {
-      ...metadata,
-      positiveFeedbackCount: newPos,
-      negativeFeedbackCount: newNeg,
-      confidence: newConfidence,
-      lastFeedbackAt: new Date().toISOString(),
+    const parseCounter = (val: unknown): number => {
+      const num = Number(val);
+      return Number.isFinite(num) ? Math.max(0, num) : 0;
     };
 
-    // Conditionally add optional provenance fields
-    if (source !== undefined) {
-      updatedMetadata["feedbackSource"] = source;
-    }
-    if (context !== undefined) {
-      updatedMetadata["feedbackContext"] = context;
-    }
+    const updateResult = await vectorStore.updateMetadata(memory_id, (metadata) => {
+      const prevPos = parseCounter(metadata["positiveFeedbackCount"]);
+      const prevNeg = parseCounter(metadata["negativeFeedbackCount"]);
+      const access = parseCounter(metadata["accessCount"]);
+      
+      const rawConf = metadata["confidence"];
+      prevConfidence = typeof rawConf === "number" && Number.isFinite(rawConf) ? rawConf : 0;
 
-    // ------------------------------------------------------------------
-    // 8. Persist updated metadata
-    // ------------------------------------------------------------------
-    const updateResult = await vectorStore.updateMetadata(memory_id, updatedMetadata);
-    if (!updateResult.success) {
-      logger.error("feedback_update_failed", {
-        memory_id,
-        error: updateResult.error,
+      let newPos = prevPos;
+      let newNeg = prevNeg;
+
+      // Note: feedback does NOT increment accessCount. Only memory_search (agent-context reads)
+      // counts as an "access" for the confidence formula. Feedback is a separate signal.
+      switch (feedback_type as FeedbackType) {
+        case "helpful":
+          newPos += 1;
+          break;
+        case "incorrect":
+        case "outdated":
+        case "duplicate":
+          newNeg += 1;
+          break;
+      }
+
+      newConfidence = computeConfidence({
+        accessCount: access,
+        positiveFeedbackCount: newPos,
+        negativeFeedbackCount: newNeg,
       });
+      totalFeedback = newPos + newNeg;
+
+      const updatedMetadata: Record<string, unknown> = {
+        ...metadata,
+        positiveFeedbackCount: newPos,
+        negativeFeedbackCount: newNeg,
+        confidence: newConfidence,
+        lastFeedbackAt: new Date().toISOString(),
+      };
+
+      if (source !== undefined) {
+        updatedMetadata["feedbackSource"] = source;
+      }
+      if (context !== undefined) {
+        updatedMetadata["feedbackContext"] = context;
+      }
+      
+      return updatedMetadata;
+    });
+
+    if (!updateResult.success) {
+      if (updateResult.code === "MEMORY_NOT_FOUND") {
+        logger.warn("feedback_memory_not_found", { memory_id });
+      } else {
+        logger.error("feedback_update_failed", { memory_id, error: updateResult.error });
+      }
+      
       return {
         success: false,
         error: updateResult.error ?? "Failed to persist feedback",
         code: updateResult.code ?? "EUNEXPECTED",
-        reason: "persistence",
+        reason: updateResult.code === "MEMORY_NOT_FOUND" ? "not_found" : "persistence",
       };
     }
 
     // ------------------------------------------------------------------
     // 9. Log and return success
     // ------------------------------------------------------------------
-    const totalFeedback = newPos + newNeg;
 
     logger.info("feedback_recorded", {
       memory_id,

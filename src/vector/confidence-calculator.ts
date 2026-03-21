@@ -34,9 +34,14 @@ export interface MemoryWithFeedback {
  * @returns Confidence score in range [-1.0, 1.0]
  */
 export function computeConfidence(memory: MemoryWithFeedback): number {
-  const accessCount = Math.max(0, memory.accessCount ?? 0);
-  const positiveFeedback = Math.max(0, memory.positiveFeedbackCount ?? 0);
-  const negativeFeedback = Math.max(0, memory.negativeFeedbackCount ?? 0);
+  const parseNumericCounter = (val: unknown): number => {
+    const num = Number(val);
+    return Number.isFinite(num) ? Math.max(0, num) : 0;
+  };
+  
+  const accessCount = parseNumericCounter(memory.accessCount);
+  const positiveFeedback = parseNumericCounter(memory.positiveFeedbackCount);
+  const negativeFeedback = parseNumericCounter(memory.negativeFeedbackCount);
 
   // Normalize access count: cap at 10 accesses
   const normalizeAccessCount = Math.min(accessCount / 10, 1.0);
