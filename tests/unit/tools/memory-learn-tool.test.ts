@@ -195,12 +195,12 @@ describe("memory_learn_from_feedback tool – happy path", () => {
     // Save a memory that will act as the canonical version
     const canonicalSave = await memorySave({ content: "canonical memory" });
     expect(canonicalSave.success).toBe(true);
-    const canonicalId = (canonicalSave.data as any).id;
+    const canonicalId = canonicalSave.success ? canonicalSave.data.id : "";
 
     // Save a memory that will be marked as duplicate
     const duplicateSave = await memorySave({ content: "duplicate memory" });
     expect(duplicateSave.success).toBe(true);
-    const memoryId = (duplicateSave.data as any).id;
+    const memoryId = duplicateSave.success ? duplicateSave.data.id : "";
 
     const feedbackResult = await memoryLearn({
       memory_id: memoryId,
@@ -277,6 +277,105 @@ describe("memory_learn_from_feedback tool – happy path", () => {
       // normalizeAccess = 0, feedbackScore = 1
       // confidence = 0.5 * 0 + 0.5 * 1 = 0.5
       expect(result.data.new_confidence).toBeCloseTo(0.5, 5);
+    }
+  });
+
+  it("does not auto-deprioritize after only 2 repeated corrections", async () => {
+    const { activation, memorySave, memoryLearn } = await activateAndGet();
+    expect(activation.success).toBe(true);
+
+    const saveResult = await memorySave({
+      content: "threshold boundary memory 2",
+    });
+    expect(saveResult.success).toBe(true);
+    const memoryId = saveResult.success ? saveResult.data.id : "";
+
+    await memoryLearn({ memory_id: memoryId, feedback_type: "incorrect" });
+    const second = await memoryLearn({
+      memory_id: memoryId,
+      feedback_type: "incorrect",
+    });
+    expect(second.success).toBe(true);
+    if (second.success) {
+      expect(second.data.new_confidence).toBeGreaterThan(-1.0);
+    }
+  });
+
+  it("auto-deprioritizes exactly at 3 repeated corrections", async () => {
+    const { activation, memorySave, memoryLearn } = await activateAndGet();
+    expect(activation.success).toBe(true);
+
+    const saveResult = await memorySave({
+      content: "threshold boundary memory 3",
+    });
+    expect(saveResult.success).toBe(true);
+    const memoryId = saveResult.success ? saveResult.data.id : "";
+
+    await memoryLearn({ memory_id: memoryId, feedback_type: "incorrect" });
+    await memoryLearn({ memory_id: memoryId, feedback_type: "incorrect" });
+    const third = await memoryLearn({
+      memory_id: memoryId,
+      feedback_type: "incorrect",
+    });
+    expect(third.success).toBe(true);
+    if (third.success) {
+      expect(third.data.new_confidence).toBe(-1.0);
+    }
+  });
+
+  it("keeps behavior stable after threshold is exceeded", async () => {
+    const { activation, memorySave, memoryLearn } = await activateAndGet();
+    expect(activation.success).toBe(true);
+
+    const saveResult = await memorySave({
+      content: "threshold boundary memory over 3",
+    });
+    expect(saveResult.success).toBe(true);
+    const memoryId = saveResult.success ? saveResult.data.id : "";
+
+    await memoryLearn({ memory_id: memoryId, feedback_type: "incorrect" });
+    await memoryLearn({ memory_id: memoryId, feedback_type: "incorrect" });
+    await memoryLearn({ memory_id: memoryId, feedback_type: "incorrect" });
+    const fourth = await memoryLearn({
+      memory_id: memoryId,
+      feedback_type: "incorrect",
+    });
+    expect(fourth.success).toBe(true);
+    if (fourth.success) {
+      expect(fourth.data.new_confidence).toBe(-1.0);
+    }
+  });
+
+  it("does not re-promote merged duplicates after additional feedback", async () => {
+    const { activation, memorySave, memoryLearn } = await activateAndGet();
+    expect(activation.success).toBe(true);
+
+    const canonicalSave = await memorySave({
+      content: "canonical memory for stability",
+    });
+    expect(canonicalSave.success).toBe(true);
+    const canonicalId = canonicalSave.success ? canonicalSave.data.id : "";
+
+    const duplicateSave = await memorySave({
+      content: "duplicate memory for stability",
+    });
+    expect(duplicateSave.success).toBe(true);
+    const duplicateId = duplicateSave.success ? duplicateSave.data.id : "";
+
+    const markDuplicate = await memoryLearn({
+      memory_id: duplicateId,
+      feedback_type: "duplicate",
+      canonical_id: canonicalId,
+    });
+    expect(markDuplicate.success).toBe(true);
+
+    const helpfulAfterDuplicate = await memoryLearn({
+      memory_id: duplicateId,
+      feedback_type: "helpful",
+    });
+    expect(helpfulAfterDuplicate.success).toBe(true);
+    if (helpfulAfterDuplicate.success) {
+      expect(helpfulAfterDuplicate.data.new_confidence).toBe(-1.0);
     }
   });
 });

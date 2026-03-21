@@ -2,6 +2,7 @@ import {
   getVectorStoreAdapterForTools,
   initializeMemoryOnFirstOperation,
 } from "../../core/plugin.js";
+import { createHash } from "node:crypto";
 import { logger } from "../../shared/logger.js";
 import type {
   FeedbackType,
@@ -21,6 +22,9 @@ const VALID_FEEDBACK_TYPES = [
   "duplicate",
   "outdated",
 ] as const;
+const PATTERN_DEPRIORITIZATION_THRESHOLD = 3;
+const RELATED_MEMORY_SCAN_LIMIT = 25;
+const RELATED_PATTERN_MAX_SCORE = 0.35;
 
 const MemoryFeedbackInputSchema = z
   .object({
@@ -135,6 +139,62 @@ export function createMemoryLearnTool(): (
       const num = Number(val);
       return Number.isFinite(num) ? Math.max(0, num) : 0;
     };
+    const normalizeForPattern = (value: string): string =>
+      value.trim().toLowerCase().replace(/\s+/g, " ");
+    const derivePatternKey = (
+      content: string,
+      category: FeedbackType,
+      sourceForPattern: string,
+    ): string => {
+      const normalized = `${normalizeForPattern(content)}|${category}|${normalizeForPattern(sourceForPattern)}`;
+      return createHash("sha256").update(normalized).digest("hex").slice(0, 16);
+    };
+    const parseString = (value: unknown): string | undefined => {
+      if (typeof value !== "string") {
+        return undefined;
+      }
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    };
+    const parseMetadataRecord = (value: unknown): Record<string, unknown> => {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        return value as Record<string, unknown>;
+      }
+      return {};
+    };
+    const shouldApplyPatternPolicy = (type: FeedbackType): boolean =>
+      type === "incorrect" || type === "outdated" || type === "duplicate";
+    const isRelatedByScore = (score: unknown): boolean => {
+      if (typeof score !== "number" || !Number.isFinite(score)) {
+        return false;
+      }
+      return score <= RELATED_PATTERN_MAX_SCORE;
+    };
+    const toTokenSet = (value: string): Set<string> => {
+      const cleaned = value.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+      return new Set(
+        cleaned
+          .split(/\s+/)
+          .map((token) => token.trim())
+          .filter((token) => token.length >= 4),
+      );
+    };
+    const hasLexicalRelatedness = (a: string, b: string): boolean => {
+      const setA = toTokenSet(a);
+      const setB = toTokenSet(b);
+      if (setA.size === 0 || setB.size === 0) {
+        return false;
+      }
+      let intersection = 0;
+      for (const token of setA) {
+        if (setB.has(token)) {
+          intersection += 1;
+        }
+      }
+      const union = new Set([...setA, ...setB]).size;
+      const jaccard = union > 0 ? intersection / union : 0;
+      return jaccard >= 0.35;
+    };
 
     // ------------------------------------------------------------------
     // 3. Validate existence of canonical memory if this is a duplicate feedback
@@ -150,6 +210,99 @@ export function createMemoryLearnTool(): (
         };
       }
     }
+    const currentMemory = await vectorStore.getById(memory_id);
+    if (!currentMemory.success) {
+      return {
+        success: false,
+        error: currentMemory.error ?? "Memory not found",
+        code: currentMemory.code ?? "MEMORY_NOT_FOUND",
+        reason: currentMemory.reason ?? "not_found",
+      };
+    }
+    const currentMetadata = parseMetadataRecord(currentMemory.data.metadata);
+    const currentContent = parseString(currentMemory.data.content);
+    if (!currentContent) {
+      return {
+        success: false,
+        error: `Memory "${memory_id}" has no retrievable content for feedback pattern analysis.`,
+        code: "MEMORY_CONTENT_UNAVAILABLE",
+        reason: "validation",
+      };
+    }
+    const sourceForPattern =
+      source?.trim() ||
+      parseString(currentMetadata?.["source"]) ||
+      parseString(currentMetadata?.["feedbackSource"]) ||
+      "unknown";
+    const patternKey = derivePatternKey(
+      currentContent,
+      feedback_type,
+      sourceForPattern,
+    );
+    const isPatternPolicyFeedback = shouldApplyPatternPolicy(feedback_type);
+    const relatedMemoryIds = new Set<string>([memory_id]);
+
+    if (isPatternPolicyFeedback) {
+      const similar = await vectorStore.search(
+        currentContent,
+        RELATED_MEMORY_SCAN_LIMIT,
+      );
+      if (similar.success) {
+        for (const item of similar.data.items) {
+          if (typeof item.id !== "string" || item.id.trim().length === 0) {
+            continue;
+          }
+          const itemMetadata = parseMetadataRecord(item.metadata);
+          const itemContent = parseString(item.content);
+          if (!itemContent) {
+            continue;
+          }
+          const itemSourceForPattern =
+            source?.trim() ||
+            parseString(itemMetadata["source"]) ||
+            parseString(itemMetadata["feedbackSource"]) ||
+            "unknown";
+          if (itemSourceForPattern !== sourceForPattern) {
+            continue;
+          }
+          const isRelated =
+            isRelatedByScore(item.score) ||
+            hasLexicalRelatedness(currentContent, itemContent);
+          if (item.id !== memory_id && !isRelated) {
+            continue;
+          }
+          const itemPatternKey = derivePatternKey(
+            itemContent,
+            feedback_type,
+            itemSourceForPattern,
+          );
+          if (itemPatternKey === patternKey || isRelated) {
+            relatedMemoryIds.add(item.id);
+          }
+        }
+      }
+    }
+    const computeGlobalPatternNegativeCount = async (): Promise<number> => {
+      if (!isPatternPolicyFeedback) {
+        return parseCounter(currentMetadata["patternNegativeCount"]);
+      }
+      let accumulated = 0;
+      for (const relatedId of relatedMemoryIds) {
+        const relatedEntry = await vectorStore.getById(relatedId);
+        if (!relatedEntry.success) {
+          continue;
+        }
+        const relatedMetadata = parseMetadataRecord(relatedEntry.data.metadata);
+        accumulated += parseCounter(relatedMetadata["negativeFeedbackCount"]);
+      }
+      return accumulated + 1;
+    };
+    const globalPatternNegativeCount =
+      await computeGlobalPatternNegativeCount();
+    let patternNegativeCount = 0;
+    let policyTriggered = false;
+    let impactedMemoryIds: string[] = [];
+    let policyRationale = "";
 
     const updateResult = await vectorStore.updateMetadata(
       memory_id,
@@ -186,6 +339,15 @@ export function createMemoryLearnTool(): (
             newNeg += 1;
             break;
         }
+        const newPatternNegativeCount = isPatternPolicyFeedback
+          ? globalPatternNegativeCount
+          : parseCounter(metadata["patternNegativeCount"]);
+        patternNegativeCount = newPatternNegativeCount;
+        policyTriggered =
+          newPatternNegativeCount >= PATTERN_DEPRIORITIZATION_THRESHOLD;
+        if (policyTriggered) {
+          policyRationale = `threshold_reached:${newPatternNegativeCount}>=${PATTERN_DEPRIORITIZATION_THRESHOLD}`;
+        }
 
         const isDuplicate =
           feedback_type === "duplicate" ||
@@ -207,7 +369,19 @@ export function createMemoryLearnTool(): (
           outdatedCount: newOutdated,
           confidence: newConfidence,
           lastFeedbackAt: new Date().toISOString(),
+          patternKey,
+          patternCategory: feedback_type,
+          patternSource: sourceForPattern,
+          patternNegativeCount: newPatternNegativeCount,
+          patternThreshold: PATTERN_DEPRIORITIZATION_THRESHOLD,
+          patternAutoDeprioritized: policyTriggered,
         };
+        if (policyTriggered) {
+          updatedMetadata["patternDeprioritizedAt"] = new Date().toISOString();
+          updatedMetadata["patternRationale"] = policyRationale;
+          updatedMetadata["confidence"] = -1.0;
+          newConfidence = -1.0;
+        }
 
         if (feedback_type === "duplicate" && canonical_id) {
           updatedMetadata["mergedIntoId"] = canonical_id;
@@ -249,6 +423,55 @@ export function createMemoryLearnTool(): (
             ? "not_found"
             : "persistence",
       };
+    }
+    if (policyTriggered && isPatternPolicyFeedback) {
+      impactedMemoryIds = Array.from(relatedMemoryIds).sort();
+      const policyTimestamp = new Date().toISOString();
+      for (const relatedId of impactedMemoryIds) {
+        if (relatedId === memory_id) {
+          continue;
+        }
+        const relatedUpdate = await vectorStore.updateMetadata(
+          relatedId,
+          (metadata): Record<string, unknown> => {
+            const relatedMergedIntoId =
+              parseString(metadata["mergedIntoId"]) ??
+              parseString(metadata["duplicateOf"]);
+            return {
+              ...metadata,
+              confidence: -1.0,
+              patternKey,
+              patternCategory: feedback_type,
+              patternSource: sourceForPattern,
+              patternNegativeCount: patternNegativeCount,
+              patternThreshold: PATTERN_DEPRIORITIZATION_THRESHOLD,
+              patternAutoDeprioritized: true,
+              patternDeprioritizedAt: policyTimestamp,
+              patternRationale: policyRationale,
+              ...(relatedMergedIntoId
+                ? { mergedIntoId: relatedMergedIntoId }
+                : {}),
+            };
+          },
+        );
+        if (!relatedUpdate.success) {
+          logger.warn("pattern_deprioritization_partial_failure", {
+            pattern_key: patternKey,
+            memory_id: relatedId,
+            error_code: relatedUpdate.code ?? "UNKNOWN",
+          });
+        }
+      }
+      logger.info("pattern_auto_deprioritized", {
+        pattern_key: patternKey,
+        pattern_category: feedback_type,
+        pattern_source: sourceForPattern,
+        threshold: PATTERN_DEPRIORITIZATION_THRESHOLD,
+        pattern_negative_count: patternNegativeCount,
+        rationale: policyRationale,
+        impacted_memory_count: impactedMemoryIds.length,
+        impacted_memory_ids_csv: impactedMemoryIds.join(","),
+      });
     }
 
     // ------------------------------------------------------------------

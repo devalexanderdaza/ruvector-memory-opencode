@@ -3,7 +3,12 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { plugin } from "../../src/plugin-manifest.js";
-import type { ToolResponse, MemorySearchResponse, MemorySaveResult, MemoryFeedbackResult } from "../../src/shared/types.js";
+import type {
+  ToolResponse,
+  MemorySearchResponse,
+  MemorySaveResult,
+  MemoryFeedbackResult,
+} from "../../src/shared/types.js";
 
 const TMP_ROOT = join(process.cwd(), ".tmp-integration-duplicate-merge");
 
@@ -29,15 +34,22 @@ async function activateAndGet() {
 
   return {
     activation,
-    memorySave: registered["memory_save"]! as (input?: unknown) => Promise<ToolResponse<MemorySaveResult>>,
-    memoryLearn: registered["memory_learn_from_feedback"]! as (input?: unknown) => Promise<ToolResponse<MemoryFeedbackResult>>,
-    memorySearch: registered["memory_search"]! as (input?: unknown) => Promise<ToolResponse<MemorySearchResponse>>,
+    memorySave: registered["memory_save"]! as (
+      input?: unknown,
+    ) => Promise<ToolResponse<MemorySaveResult>>,
+    memoryLearn: registered["memory_learn_from_feedback"]! as (
+      input?: unknown,
+    ) => Promise<ToolResponse<MemoryFeedbackResult>>,
+    memorySearch: registered["memory_search"]! as (
+      input?: unknown,
+    ) => Promise<ToolResponse<MemorySearchResponse>>,
   };
 }
 
 describe("Duplicate Detection and Memory Merge Integration", () => {
   it("marking a memory as a duplicate of another links them and penalizes the duplicate", async () => {
-    const { activation, memorySave, memoryLearn, memorySearch } = await activateAndGet();
+    const { activation, memorySave, memoryLearn, memorySearch } =
+      await activateAndGet();
     expect(activation.success).toBe(true);
 
     const phrase = "The project uses tsup for bundling TypeScript code.";
@@ -59,7 +71,7 @@ describe("Duplicate Detection and Memory Merge Integration", () => {
     const mergeResult = await memoryLearn({
       memory_id: idB,
       feedback_type: "duplicate",
-      canonical_id: idA
+      canonical_id: idA,
     });
 
     expect(mergeResult.success).toBe(true);
@@ -73,8 +85,8 @@ describe("Duplicate Detection and Memory Merge Integration", () => {
     if (!searchRes.success) return;
 
     const results = searchRes.data.results;
-    const memoryA = results.find(r => r.id === idA);
-    const memoryB = results.find(r => r.id === idB);
+    const memoryA = results.find((r) => r.id === idA);
+    const memoryB = results.find((r) => r.id === idB);
 
     expect(memoryA).toBeDefined();
     expect(memoryB).toBeDefined();
@@ -82,7 +94,7 @@ describe("Duplicate Detection and Memory Merge Integration", () => {
     // Memory B should have -1.0 confidence and be at the bottom
     // After fixing Task 1 and 2, this should pass.
     expect(memoryB!.confidence).toBe(-1.0);
-    
+
     // Metadata should reflect the merge
     // @ts-ignore - mergedIntoId added to SearchResult
     expect(memoryB!.mergedIntoId).toBe(idA);
@@ -101,12 +113,116 @@ describe("Duplicate Detection and Memory Merge Integration", () => {
       // canonical_id is missing
     });
 
-    // The requirement suggests linkage is key. If no canonical_id is provided, 
-    // we should probably fail or at least warn. 
+    // The requirement suggests linkage is key. If no canonical_id is provided,
+    // we should probably fail or at least warn.
     // Let's assume for now it's required for the merge workflow.
     expect(result.success).toBe(false);
     if (!result.success) {
-       expect(result.code).toBe("MISSING_CANONICAL_ID");
+      expect(result.code).toBe("MISSING_CANONICAL_ID");
     }
+  });
+
+  it("auto-deprioritizes related memories after 3 repeated corrections of same pattern", async () => {
+    const { activation, memorySave, memoryLearn, memorySearch } =
+      await activateAndGet();
+    expect(activation.success).toBe(true);
+
+    const sharedContent =
+      "Always use deterministic IDs for generated metadata keys.";
+    const saveA = await memorySave({ content: sharedContent, source: "agent" });
+    const saveB = await memorySave({ content: sharedContent, source: "agent" });
+    expect(saveA.success).toBe(true);
+    expect(saveB.success).toBe(true);
+    const idA = saveA.success ? saveA.data.id : "";
+    const idB = saveB.success ? saveB.data.id : "";
+
+    await memoryLearn({
+      memory_id: idA,
+      feedback_type: "incorrect",
+      source: "agent",
+    });
+    await memoryLearn({
+      memory_id: idA,
+      feedback_type: "incorrect",
+      source: "agent",
+    });
+    const third = await memoryLearn({
+      memory_id: idA,
+      feedback_type: "incorrect",
+      source: "agent",
+    });
+    expect(third.success).toBe(true);
+    if (third.success) {
+      expect(third.data.new_confidence).toBe(-1.0);
+    }
+
+    const search = await memorySearch({ query: sharedContent, limit: 5 });
+    expect(search.success).toBe(true);
+    if (!search.success) return;
+    const first = search.data.results.find((item) => item.id === idA);
+    const second = search.data.results.find((item) => item.id === idB);
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    expect(first?.confidence).toBe(-1.0);
+    expect(second?.confidence).toBe(-1.0);
+  });
+
+  it("triggers pattern threshold across different related memories", async () => {
+    const { activation, memorySave, memoryLearn, memorySearch } =
+      await activateAndGet();
+    expect(activation.success).toBe(true);
+
+    const saveA = await memorySave({
+      content: "Use deterministic IDs for metadata keys in generated records.",
+      source: "agent",
+    });
+    const saveB = await memorySave({
+      content:
+        "Generated records should rely on deterministic metadata key IDs.",
+      source: "agent",
+    });
+    const saveC = await memorySave({
+      content:
+        "Prefer deterministic metadata key identifiers for generated data.",
+      source: "agent",
+    });
+    expect(saveA.success).toBe(true);
+    expect(saveB.success).toBe(true);
+    expect(saveC.success).toBe(true);
+
+    const idA = saveA.success ? saveA.data.id : "";
+    const idB = saveB.success ? saveB.data.id : "";
+    const idC = saveC.success ? saveC.data.id : "";
+
+    await memoryLearn({
+      memory_id: idA,
+      feedback_type: "incorrect",
+      source: "agent",
+    });
+    await memoryLearn({
+      memory_id: idB,
+      feedback_type: "incorrect",
+      source: "agent",
+    });
+    const third = await memoryLearn({
+      memory_id: idC,
+      feedback_type: "incorrect",
+      source: "agent",
+    });
+    expect(third.success).toBe(true);
+
+    const search = await memorySearch({
+      query: "deterministic metadata key ids",
+      limit: 10,
+    });
+    expect(search.success).toBe(true);
+    if (!search.success) return;
+
+    const a = search.data.results.find((item) => item.id === idA);
+    const b = search.data.results.find((item) => item.id === idB);
+    const c = search.data.results.find((item) => item.id === idC);
+    expect(a?.confidence).toBe(-1.0);
+    expect(b?.confidence).toBe(-1.0);
+    expect(c?.confidence).toBe(-1.0);
   });
 });

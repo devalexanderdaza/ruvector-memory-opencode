@@ -57,17 +57,26 @@ describe("Memory Response Formatter", () => {
           {
             id: "mem-1",
             score: 0.5,
-            metadata: JSON.stringify({ created_at: "2026-03-10T00:00:00Z", source: "manual" }),
+            metadata: JSON.stringify({
+              created_at: "2026-03-10T00:00:00Z",
+              source: "manual",
+            }),
           },
           {
             id: "mem-2",
             score: 0.1,
-            metadata: JSON.stringify({ created_at: "2026-03-10T00:00:00Z", source: "manual" }),
+            metadata: JSON.stringify({
+              created_at: "2026-03-10T00:00:00Z",
+              source: "manual",
+            }),
           },
           {
             id: "mem-3",
             score: 0.3,
-            metadata: JSON.stringify({ created_at: "2026-03-10T00:00:00Z", source: "manual" }),
+            metadata: JSON.stringify({
+              created_at: "2026-03-10T00:00:00Z",
+              source: "manual",
+            }),
           },
         ],
       };
@@ -89,12 +98,18 @@ describe("Memory Response Formatter", () => {
           {
             id: "mem-normal",
             score: 0.1,
-            metadata: JSON.stringify({ created_at: "2026-03-10T00:00:00Z", source: "manual" }),
+            metadata: JSON.stringify({
+              created_at: "2026-03-10T00:00:00Z",
+              source: "manual",
+            }),
           },
           {
             id: "mem-boosted",
             score: -0.2,
-            metadata: JSON.stringify({ created_at: "2026-03-10T00:00:00Z", source: "manual" }),
+            metadata: JSON.stringify({
+              created_at: "2026-03-10T00:00:00Z",
+              source: "manual",
+            }),
           },
         ],
       };
@@ -169,7 +184,10 @@ describe("Memory Response Formatter", () => {
           {
             id: "mem-ts",
             score: 0.1,
-            metadata: JSON.stringify({ created_at: isoTimestamp, source: "agent" }),
+            metadata: JSON.stringify({
+              created_at: isoTimestamp,
+              source: "agent",
+            }),
           },
         ],
       };
@@ -284,7 +302,11 @@ describe("Memory Response Formatter", () => {
     });
 
     it("handles malformed metadata gracefully", () => {
-      const input = { items: [{ id: "mem-malformed", score: 0.1, metadata: "invalid json {{{" }] };
+      const input = {
+        items: [
+          { id: "mem-malformed", score: 0.1, metadata: "invalid json {{{" },
+        ],
+      };
 
       const result = formatSearchResults(input as any);
 
@@ -292,14 +314,16 @@ describe("Memory Response Formatter", () => {
       expect(result.results[0]?.source).toBe("manual");
     });
 
-    it("throws on malformed search results structure", () => {
-      expect(() => {
-        formatSearchResults(null as any);
-      }).toThrow();
+    it("returns empty successful shape on malformed search results structure", () => {
+      const nullInput = formatSearchResults(null as any);
+      expect(nullInput.success).toBe(true);
+      expect(nullInput.results).toEqual([]);
+      expect(nullInput.count).toBe(0);
 
-      expect(() => {
-        formatSearchResults({} as any);
-      }).toThrow();
+      const emptyObjectInput = formatSearchResults({} as any);
+      expect(emptyObjectInput.success).toBe(true);
+      expect(emptyObjectInput.results).toEqual([]);
+      expect(emptyObjectInput.count).toBe(0);
     });
 
     it("calculates confidence correctly with feedback", () => {
@@ -349,7 +373,10 @@ describe("Memory Response Formatter", () => {
           {
             id: "mem-c",
             score: 0.15,
-            metadata: JSON.stringify({ created_at: "2026-03-11T00:00:00Z", source: "agent" }),
+            metadata: JSON.stringify({
+              created_at: "2026-03-11T00:00:00Z",
+              source: "agent",
+            }),
           },
         ],
       };

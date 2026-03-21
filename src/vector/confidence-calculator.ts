@@ -39,7 +39,7 @@ export function computeConfidence(memory: MemoryWithFeedback): number {
     const num = Number(val);
     return Number.isFinite(num) ? Math.max(0, num) : 0;
   };
-  
+
   const accessCount = parseNumericCounter(memory.accessCount);
   const positiveFeedback = parseNumericCounter(memory.positiveFeedbackCount);
   const negativeFeedback = parseNumericCounter(memory.negativeFeedbackCount);
@@ -60,15 +60,19 @@ export function computeConfidence(memory: MemoryWithFeedback): number {
   let feedbackScore = 0;
   if (totalFeedback > 0) {
     // Progressive penalty weight based on number of negative feedbacks
-    const negWeight = 1 + (negativeFeedback * 0.5); // 1 neg -> 1.5x, 2 neg -> 2.0x
-    feedbackScore = (positiveFeedback - negWeight * negativeFeedback) / totalFeedback;
+    const negWeight = 1 + negativeFeedback * 0.5; // 1 neg -> 1.5x, 2 neg -> 2.0x
+    feedbackScore =
+      (positiveFeedback - negWeight * negativeFeedback) / totalFeedback;
   }
 
   // Compute weighted average: access history + feedback signals
   const confidence = 0.5 * normalizeAccessCount + 0.5 * feedbackScore;
+  // Keep threshold semantics explicit: full auto-deprioritization to -1.0 starts at >=3 negatives.
+  const boundedConfidence =
+    negativeFeedback < 3 ? Math.max(confidence, -0.99) : confidence;
 
   // Clamp to [-1.0, 1.0]
-  return Math.max(-1.0, Math.min(1.0, confidence));
+  return Math.max(-1.0, Math.min(1.0, boundedConfidence));
 }
 
 /**
