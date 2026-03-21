@@ -554,6 +554,36 @@ export class VectorStoreAdapter {
     }
   }
 
+  public async insertWithVector(
+    id: string,
+    vector: Float32Array | number[],
+    metadata: Record<string, unknown>,
+  ): Promise<ToolResponse<{ id: string }>> {
+    const db = await this.getDbOrNull();
+    if (!db) {
+      return {
+        success: false,
+        error: "Memory database is not ready",
+        code: "ENOTREADY",
+        reason: "initialization",
+      };
+    }
+
+    // @ruvector/core NAPI module requires a Float32Array — plain number[] causes InvalidArg.
+    // Normalize to Float32Array so the same contract as save() is upheld.
+    const float32Vector =
+      vector instanceof Float32Array ? vector : new Float32Array(vector);
+
+    await db.insert({
+      id,
+      vector: float32Vector,
+      // Metadata must be JSON-stringified — same contract as save().
+      metadata: JSON.stringify(metadata),
+    });
+
+    return { success: true, data: { id } };
+  }
+
   public resetForTests(): void {
     this.initPromise = null;
     this.lastInitResult = null;

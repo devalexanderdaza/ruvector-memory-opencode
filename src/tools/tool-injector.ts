@@ -7,6 +7,7 @@ import { createMemoryLearningMetricsTool } from "./tools/memory-learning-metrics
 import { createMemorySaveTool } from "./tools/memory-save-tool.js";
 import { createMemorySearchTool } from "./tools/memory-search-tool.js";
 import { createMemoryExportTool } from "./tools/memory-export-tool.js";
+import { createMemoryImportTool } from "./tools/memory-import-tool.js";
 
 export interface ToolRegistryLike {
   registerTool: (
@@ -44,6 +45,7 @@ export function injectTools(context: PluginActivationContext = {}): {
     createMemoryLearningAuditHistoryTool(),
   );
   registry.registerTool("memory_export", createMemoryExportTool());
+  registry.registerTool("memory_import", createMemoryImportTool());
 
   logger.info("tools_registered", {
     tools: [
@@ -53,6 +55,7 @@ export function injectTools(context: PluginActivationContext = {}): {
       "memory_learning_metrics",
       "memory_learning_audit_history",
       "memory_export",
+      "memory_import",
     ],
   });
 

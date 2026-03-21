@@ -13,7 +13,7 @@ describe("injectTools", () => {
     });
 
     expect(result.registered).toBe(true);
-    expect(registerTool).toHaveBeenCalledTimes(6);
+    expect(registerTool).toHaveBeenCalledTimes(7);
 
     const registeredNames = registerTool.mock.calls.map((call) => call[0]);
     expect(registeredNames).toEqual([
@@ -23,6 +23,7 @@ describe("injectTools", () => {
       "memory_learning_metrics",
       "memory_learning_audit_history",
       "memory_export",
+      "memory_import",
     ]);
 
     for (const call of registerTool.mock.calls) {
@@ -57,6 +58,7 @@ describe("registered tool handlers", () => {
     const metrics = handlersByName.get("memory_learning_metrics");
     const auditHistory = handlersByName.get("memory_learning_audit_history");
     const memoryExport = handlersByName.get("memory_export");
+    const memoryImport = handlersByName.get("memory_import");
 
     expect(save).toBeTypeOf("function");
     expect(search).toBeTypeOf("function");
@@ -64,6 +66,7 @@ describe("registered tool handlers", () => {
     expect(metrics).toBeTypeOf("function");
     expect(auditHistory).toBeTypeOf("function");
     expect(memoryExport).toBeTypeOf("function");
+    expect(memoryImport).toBeTypeOf("function");
 
     const saveResult = await save?.("x");
     const searchResult = await search?.("y");
@@ -71,6 +74,7 @@ describe("registered tool handlers", () => {
     const metricsResult = await metrics?.("q");
     const auditHistoryResult = await auditHistory?.("h");
     const exportResult = await memoryExport?.({});
+    const importResult = await memoryImport?.({});
 
     // Save/search require activation + DB init (Story 1.5), so without activation we should
     // see activation-related structured errors.
@@ -104,6 +108,10 @@ describe("registered tool handlers", () => {
       reason: "validation",
     });
     expect(exportResult).toMatchObject({
+      success: false,
+      code: "PLUGIN_NOT_ACTIVATED",
+    });
+    expect(importResult).toMatchObject({
       success: false,
       code: "PLUGIN_NOT_ACTIVATED",
     });

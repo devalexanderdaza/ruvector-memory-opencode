@@ -293,7 +293,7 @@ export interface LearningAuditHistoryResult {
 
 
 // ---------------------------------------------------------------------------
-// Export/Import types (Story 4.1)
+// Export/Import types (Story 4.1+)
 // ---------------------------------------------------------------------------
 
 /** Current version of the portable .rvf format. */
@@ -328,6 +328,38 @@ export interface MemoryExportResult {
   file_size_bytes: number;
   export_timestamp: string;
   format_version: string;
+}
+
+/** Input for the memory_import tool (Story 4.2). */
+export interface MemoryImportInput {
+  /** Absolute or relative path to the .rvf file to import. */
+  file_path: string;
+  /**
+   * When true, validate the file and count importable entries without
+   * writing anything to the vector store. Default: false.
+   */
+  dry_run?: boolean;
+  /**
+   * When true, overwrite the `source` field of each imported memory with
+   * "import" to track provenance. Default: true.
+   */
+  overwrite_source?: boolean;
+}
+
+/** Result returned by memory_import tool on success (Story 4.2). */
+export interface MemoryImportResult {
+  /** Number of memory entries successfully written to the store. */
+  imported_count: number;
+  /** Number of entries skipped (e.g. in dry_run mode or parse errors). */
+  skipped_count: number;
+  /** Project name from the .rvf manifest. */
+  source_project: string;
+  /** Format version string from the .rvf manifest. */
+  format_version: string;
+  /** Path of the file that was imported. */
+  file_path: string;
+  /** Whether the import was a dry run (no writes performed). */
+  dry_run: boolean;
 }
 
 /** Specific error codes for feedback logic. */
