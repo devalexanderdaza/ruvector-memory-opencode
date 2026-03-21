@@ -18,6 +18,7 @@ coverage/
 .DS_Store
 .vscode/
 .idea/
+.cursor/hooks/
 
 # BMAD generated outputs and local workspace caches
 # _bmad-output/
