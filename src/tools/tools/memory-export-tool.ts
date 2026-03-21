@@ -1,11 +1,25 @@
 import { join } from "node:path";
 import { exportMemories } from "../../import-export/index.js";
+import { z } from "zod";
 import {
   ensureProjectContextForTools,
   getVectorStoreAdapterForTools,
   initializeMemoryOnFirstOperation,
 } from "../../core/plugin.js";
 import type { MemoryExportInput, MemoryExportResult, ToolResponse } from "../../shared/types.js";
+
+const MemoryExportInputSchema = z
+  .object({
+    output_path: z.string().trim().min(1).optional(),
+    include_vectors: z.boolean().optional(),
+    filters: z
+      .object({
+        source: z.string().trim().min(1).optional(),
+        tags: z.array(z.string().trim().min(1)).optional(),
+      })
+      .optional(),
+  })
+  .strict();
 
 /**
  * Factory for the memory_export tool.
@@ -31,10 +45,21 @@ export function createMemoryExportTool() {
     }
 
     try {
+      const parseResult = MemoryExportInputSchema.safeParse(input ?? {});
+      if (!parseResult.success) {
+        const firstIssue = parseResult.error.issues[0];
+        return {
+          success: false,
+          error: firstIssue?.message ?? "Invalid input for memory_export",
+          code: "INVALID_INPUT",
+          reason: "validation",
+        };
+      }
+
       const projectContext = await ensureProjectContextForTools();
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      
-      const candidate = (input || {}) as Partial<MemoryExportInput>;
+
+      const candidate = parseResult.data as Partial<MemoryExportInput>;
       const outputPathOverride = typeof candidate.output_path === "string" ? candidate.output_path : undefined;
 
       // Default output path is in .opencode/ related to project root
@@ -55,6 +80,8 @@ export function createMemoryExportTool() {
         outputPath,
         projectName: projectContext.projectName,
         vectorDimensions: dimensions,
+        includeVectors: candidate.include_vectors ?? true,
+        ...(candidate.filters && { filters: candidate.filters }),
       });
     } catch (error) {
       return {

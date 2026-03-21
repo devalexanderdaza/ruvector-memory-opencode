@@ -41,4 +41,36 @@ describe("memory_export tool unit tests", () => {
        expect(result.data.memory_count).toBe(0); // empty db
     }
   });
+
+  it("returns validation error for invalid input payload", async () => {
+    await activatePlugin({ projectRoot: TMP_TOOL_DIR });
+
+    const tool = createMemoryExportTool();
+    const result = await tool({ output_path: "", include_vectors: "yes" as unknown as boolean });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.code).toBe("INVALID_INPUT");
+      expect(result.reason).toBe("validation");
+    }
+  });
+
+  it("accepts valid filters payload", async () => {
+    await activatePlugin({ projectRoot: TMP_TOOL_DIR });
+
+    const tool = createMemoryExportTool();
+    const outputPath = join(TMP_TOOL_DIR, "filtered-export.rvf");
+    const result = await tool({
+      output_path: outputPath,
+      filters: {
+        source: "manual",
+        tags: ["docs"],
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.file_path).toBe(outputPath);
+    }
+  });
 });

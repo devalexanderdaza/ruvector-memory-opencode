@@ -82,4 +82,34 @@ describe("VectorStoreAdapter.listAll", () => {
       expect(result.code).toBe("ENOTREADY");
     }
   });
+
+  it("returns failure when full enumeration is incomplete", async () => {
+    const root = join(TEST_ROOT, "incomplete");
+    const adapter = createVectorStoreAdapter(DEFAULT_CONFIG, root) as any;
+
+    adapter.lastInitResult = {
+      success: true,
+      data: {
+        firstRun: false,
+        created: false,
+        dbPath: "mock",
+        initializationMs: 1,
+        databaseSize: 0,
+      },
+    };
+
+    adapter.db = {
+      len: async () => 3,
+      search: async () => [{ id: "a", score: 0.1 }],
+      get: async (id: string) => ({ id, vector: [0.1, 0.2], metadata: JSON.stringify({ content: id }) }),
+      insert: async () => "ignored",
+    };
+
+    const result = await adapter.listAll();
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.code).toBe("LIST_ALL_INCOMPLETE");
+      expect(result.reason).toBe("retrieval");
+    }
+  });
 });

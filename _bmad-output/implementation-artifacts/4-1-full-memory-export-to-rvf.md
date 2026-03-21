@@ -1,6 +1,6 @@
 # Story 4.1: Full Memory Export to RVF
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -197,10 +197,24 @@ This format satisfies:
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+GPT-5.3-Codex
 
 ### Debug Log References
 
 ### Completion Notes List
 
+- Applied post-review hardening for deterministic RVF export and stricter format validation.
+- Added strict Zod input validation for `memory_export` including optional filters.
+- Improved `listAll()` to avoid silent partial enumeration by failing when full discovery cannot be confirmed.
+- Added/updated tests for determinism, filter behavior, malformed middle-line detection, and count mismatch validation.
+
 ### File List
+
+- src/vector/vector-store.ts
+- src/import-export/rvf-exporter.ts
+- src/import-export/format-validator.ts
+- src/tools/tools/memory-export-tool.ts
+- src/shared/types.ts
+- tests/unit/import-export/rvf-exporter.test.ts
+- tests/unit/tools/memory-export-tool.test.ts
+- tests/unit/vector/vector-store-list.test.ts

@@ -314,6 +314,11 @@ export interface MemoryExportInput {
   output_path?: string;
   /** Whether to include the high-dimensional vectors. Default: true */
   include_vectors?: boolean;
+  /** Optional metadata filters to limit exported memories. */
+  filters?: {
+    source?: string;
+    tags?: string[];
+  };
 }
 
 /** Result returned by memory_export tool on success. */

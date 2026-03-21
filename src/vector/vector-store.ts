@@ -163,6 +163,28 @@ function matchesFilters(metadata: Record<string, unknown>, filters: MemorySearch
   return true;
 }
 
+function buildDeterministicProbeVectors(
+  dimensions: number,
+  expectedCount: number,
+): Float32Array[] {
+  const safeDimensions = Math.max(1, Math.floor(dimensions));
+  const probes: Float32Array[] = [new Float32Array(safeDimensions)];
+
+  const extraProbeCount = Math.min(
+    32,
+    Math.max(8, Math.ceil(Math.log2(Math.max(2, expectedCount))) * 4),
+  );
+
+  for (let i = 0; i < extraProbeCount; i += 1) {
+    const probe = new Float32Array(safeDimensions);
+    const index = ((i + 1) * 2654435761) % safeDimensions;
+    probe[index] = i % 2 === 0 ? 1 : -1;
+    probes.push(probe);
+  }
+
+  return probes;
+}
+
 export class VectorStoreAdapter {
   private readonly config: RuVectorMemoryConfig;
   private readonly projectRoot: string;
@@ -480,24 +502,47 @@ export class VectorStoreAdapter {
         return { success: true, data: { entries: [] } };
       }
 
-      // To get all entries, we search with k equal to total count using a dummy zero vector.
-      // HNSW will return the k nearest neighbors, which in this case is everything.
-      const dummyVector = new Float32Array(this.config.vector_dimensions);
-      const results = await db.search({
-        vector: dummyVector,
-        k: count,
-      });
+      // HNSW search can be approximate; probe multiple deterministic vectors and
+      // fail fast if we cannot recover the full ID set.
+      const probes = buildDeterministicProbeVectors(this.config.vector_dimensions, count);
+      const uniqueIds = new Set<string>();
+      const discoveredIds: string[] = [];
+
+      for (const probe of probes) {
+        const results = await db.search({ vector: probe, k: count });
+        for (const result of results) {
+          if (!uniqueIds.has(result.id)) {
+            uniqueIds.add(result.id);
+            discoveredIds.push(result.id);
+          }
+        }
+
+        if (uniqueIds.size >= count) {
+          break;
+        }
+      }
+
+      if (uniqueIds.size !== count) {
+        return {
+          success: false,
+          error: `Unable to enumerate all memories: discovered ${uniqueIds.size} of ${count}`,
+          code: "LIST_ALL_INCOMPLETE",
+          reason: "retrieval",
+        };
+      }
 
       const entries = await Promise.all(
-        results.map(async (r) => {
-          const entry = await db.get(r.id);
+        discoveredIds.map(async (id) => {
+          const entry = await db.get(id);
           return {
-            id: r.id,
+            id,
             vector: entry?.vector ?? new Float32Array(this.config.vector_dimensions),
             metadata: parseMetadata(entry?.metadata) ?? {},
           };
         }),
       );
+
+      entries.sort((a, b) => a.id.localeCompare(b.id));
 
       return { success: true, data: { entries } };
     } catch (error) {

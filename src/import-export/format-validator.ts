@@ -25,16 +25,31 @@ export function validateRvfFormat(filePath: string): { valid: boolean; error?: s
        return { valid: false, error: "Invalid manifest structure" };
     }
 
-    // Validate Entry Lines (sample first and last to save time/CPU)
-    if (lines.length > 1) {
-      const sampleIndices = [1, lines.length - 1];
-      for (const i of sampleIndices) {
-        const line = lines[i];
-        if (!line) continue;
-        const entry = JSON.parse(line);
-        if (!entry.id || !Array.isArray(entry.vector) || typeof entry.metadata !== "object") {
-          return { valid: false, error: `Invalid entry at line ${i + 1}` };
-        }
+    const entryCount = lines.length - 1;
+    if (manifest.memory_count !== entryCount) {
+      return {
+        valid: false,
+        error: `Manifest memory_count (${manifest.memory_count}) does not match entries (${entryCount})`,
+      };
+    }
+
+    // Validate all entry lines to avoid false positives on partially corrupted files.
+    for (let i = 1; i < lines.length; i += 1) {
+      const line = lines[i];
+      if (!line) {
+        return { valid: false, error: `Invalid entry at line ${i + 1}` };
+      }
+
+      const entry = JSON.parse(line);
+      const hasValidMetadata =
+        typeof entry.metadata === "object" && entry.metadata !== null && !Array.isArray(entry.metadata);
+
+      if (!entry.id || !hasValidMetadata) {
+        return { valid: false, error: `Invalid entry at line ${i + 1}` };
+      }
+
+      if (manifest.memory_count > 0 && !Array.isArray(entry.vector)) {
+        return { valid: false, error: `Invalid vector at line ${i + 1}` };
       }
     }
 

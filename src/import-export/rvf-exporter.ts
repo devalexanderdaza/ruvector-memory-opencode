@@ -1,4 +1,4 @@
-import { writeFile, rename, mkdir } from "node:fs/promises";
+import { writeFile, rename, mkdir, rm } from "node:fs/promises";
 import { dirname } from "node:path";
 import { logger } from "../shared/logger.js";
 import { RVF_FORMAT_VERSION, type RvfManifest, type ToolResponse, type MemoryExportResult } from "../shared/types.js";
@@ -9,6 +9,67 @@ export interface ExportOptions {
   outputPath: string;
   projectName: string;
   vectorDimensions: number;
+  exportTimestamp?: string;
+  includeVectors?: boolean;
+  filters?: {
+    source?: string;
+    tags?: string[];
+  };
+}
+
+function resolveDeterministicTimestamp(
+  entries: Array<{ metadata: Record<string, unknown> }>,
+): string {
+  const timestamps = entries
+    .map((entry) => entry.metadata.created_at)
+    .filter((value): value is string => typeof value === "string" && value.length > 0)
+    .sort();
+
+  if (timestamps.length === 0) {
+    return "1970-01-01T00:00:00.000Z";
+  }
+
+  return timestamps[timestamps.length - 1] as string;
+}
+
+function normalizeTags(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+function matchesExportFilters(
+  metadata: Record<string, unknown>,
+  filters?: { source?: string; tags?: string[] },
+): boolean {
+  if (!filters) {
+    return true;
+  }
+
+  if (typeof filters.source === "string" && filters.source.length > 0) {
+    if (metadata.source !== filters.source) {
+      return false;
+    }
+  }
+
+  if (Array.isArray(filters.tags) && filters.tags.length > 0) {
+    const expected = new Set(
+      filters.tags
+        .map((tag) => tag.trim())
+        .filter((tag) => tag.length > 0),
+    );
+    const actual = new Set(normalizeTags(metadata.tags));
+    const hasOverlap = [...expected].some((tag) => actual.has(tag));
+    if (!hasOverlap) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 /**
@@ -18,7 +79,15 @@ export interface ExportOptions {
 export async function exportMemories(
   options: ExportOptions,
 ): Promise<ToolResponse<MemoryExportResult>> {
-  const { adapter, outputPath, projectName, vectorDimensions } = options;
+  const {
+    adapter,
+    outputPath,
+    projectName,
+    vectorDimensions,
+    exportTimestamp,
+    includeVectors = true,
+    filters,
+  } = options;
   const tempPath = `${outputPath}.tmp`;
 
   logger.info("memory_export_started", { 
@@ -36,10 +105,13 @@ export async function exportMemories(
       return listResult as ToolResponse<never>;
     }
 
-    const { entries } = listResult.data;
+    const entries = [...listResult.data.entries]
+      .filter((entry) => matchesExportFilters(entry.metadata, filters))
+      .sort((a, b) => a.id.localeCompare(b.id));
+    const resolvedTimestamp = exportTimestamp ?? resolveDeterministicTimestamp(entries);
     const manifest: RvfManifest = {
       format_version: RVF_FORMAT_VERSION,
-      export_timestamp: new Date().toISOString(),
+      export_timestamp: resolvedTimestamp,
       source_project: projectName,
       memory_count: entries.length,
       vector_dimensions: vectorDimensions,
@@ -54,8 +126,10 @@ export async function exportMemories(
       lines.push(
         JSON.stringify({
           id: e.id,
-          // Ensure vector is serialized as a plain array for JSON compatibility
-          vector: Array.isArray(e.vector) ? e.vector : Array.from(e.vector),
+          ...(includeVectors && {
+            // Ensure vector is serialized as a plain array for JSON compatibility
+            vector: Array.isArray(e.vector) ? e.vector : Array.from(e.vector),
+          }),
           metadata: e.metadata,
         }),
       );
@@ -86,12 +160,13 @@ export async function exportMemories(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error during export";
+    await rm(tempPath, { force: true }).catch(() => undefined);
     logger.error("memory_export_failed", { error: message });
     
     return {
       success: false,
       error: `Export failed: ${message}`,
-      code: "EXPORT_FAILED",
+      code: "EXPORT_WRITE_FAILED",
       reason: "filesystem",
     };
   }

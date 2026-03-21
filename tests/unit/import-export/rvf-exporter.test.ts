@@ -73,6 +73,52 @@ describe("rvf-exporter", () => {
     }
   });
 
+  it("produces deterministic output for the same input state", async () => {
+    const outputPathA = join(TMP_TEST_DIR, "deterministic-a.rvf");
+    const outputPathB = join(TMP_TEST_DIR, "deterministic-b.rvf");
+
+    const mockAdapter = {
+      listAll: vi.fn().mockResolvedValue({
+        success: true,
+        data: {
+          entries: [
+            {
+              id: "b-id",
+              vector: [0.3, 0.4],
+              metadata: { content: "c2", created_at: "2026-03-21T10:00:00.000Z" },
+            },
+            {
+              id: "a-id",
+              vector: [0.1, 0.2],
+              metadata: { content: "c1", created_at: "2026-03-20T10:00:00.000Z" },
+            },
+          ],
+        },
+      }),
+    } as any;
+
+    const exportA = await exportMemories({
+      adapter: mockAdapter,
+      outputPath: outputPathA,
+      projectName: "deterministic-project",
+      vectorDimensions: 128,
+    });
+
+    const exportB = await exportMemories({
+      adapter: mockAdapter,
+      outputPath: outputPathB,
+      projectName: "deterministic-project",
+      vectorDimensions: 128,
+    });
+
+    expect(exportA.success).toBe(true);
+    expect(exportB.success).toBe(true);
+
+    const contentA = readFileSync(outputPathA, "utf8");
+    const contentB = readFileSync(outputPathB, "utf8");
+    expect(contentA).toBe(contentB);
+  });
+
   it("exports an empty database successfully", async () => {
     const outputPath = join(TMP_TEST_DIR, "empty.rvf");
 
@@ -98,6 +144,52 @@ describe("rvf-exporter", () => {
       if (!manifestLine) throw new Error("Manifest line missing");
       const manifest = JSON.parse(manifestLine);
       expect(manifest.memory_count).toBe(0);
+    }
+  });
+
+  it("applies source and tags filters during export", async () => {
+    const outputPath = join(TMP_TEST_DIR, "filtered.rvf");
+
+    const mockAdapter = {
+      listAll: vi.fn().mockResolvedValue({
+        success: true,
+        data: {
+          entries: [
+            {
+              id: "1",
+              vector: [0.1, 0.2],
+              metadata: { content: "a", source: "manual", tags: ["keep", "x"] },
+            },
+            {
+              id: "2",
+              vector: [0.3, 0.4],
+              metadata: { content: "b", source: "agent", tags: ["drop"] },
+            },
+          ],
+        },
+      }),
+    } as any;
+
+    const result = await exportMemories({
+      adapter: mockAdapter,
+      outputPath,
+      projectName: "test-project",
+      vectorDimensions: 128,
+      filters: {
+        source: "manual",
+        tags: ["keep"],
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.memory_count).toBe(1);
+      const lines = readFileSync(outputPath, "utf8").trim().split("\n");
+      expect(lines).toHaveLength(2);
+      const onlyEntryLine = lines[1];
+      if (!onlyEntryLine) throw new Error("Filtered entry missing");
+      const onlyEntry = JSON.parse(onlyEntryLine);
+      expect(onlyEntry.id).toBe("1");
     }
   });
 
@@ -146,12 +238,56 @@ describe("rvf-exporter", () => {
       expect(validation.error).toBeDefined();
     });
 
+    it("rejects corruption in middle entries", () => {
+      const p = join(TMP_TEST_DIR, "corrupt-middle.rvf");
+      writeFileSync(
+        p,
+        [
+          JSON.stringify({
+            format_version: RVF_FORMAT_VERSION,
+            export_timestamp: "2026-03-21T00:00:00.000Z",
+            source_project: "p",
+            memory_count: 3,
+            vector_dimensions: 2,
+          }),
+          JSON.stringify({ id: "a", vector: [0.1, 0.2], metadata: { ok: true } }),
+          "{\"id\":\"b\",\"vector\":[0.3,0.4],\"metadata\":}",
+          JSON.stringify({ id: "c", vector: [0.5, 0.6], metadata: { ok: true } }),
+        ].join("\n"),
+      );
+
+      const validation = validateRvfFormat(p);
+      expect(validation.valid).toBe(false);
+      expect(validation.error).toBeDefined();
+    });
+
     it("rejects invalid manifest version", () => {
       const p = join(TMP_TEST_DIR, "old.rvf");
       writeFileSync(p, JSON.stringify({ format_version: "0.0.1" }));
       const validation = validateRvfFormat(p);
       expect(validation.valid).toBe(false);
       expect(validation.error).toContain("Unsupported format version");
+    });
+
+    it("rejects files when manifest memory_count does not match entries", () => {
+      const p = join(TMP_TEST_DIR, "count-mismatch.rvf");
+      writeFileSync(
+        p,
+        [
+          JSON.stringify({
+            format_version: RVF_FORMAT_VERSION,
+            export_timestamp: "2026-03-21T00:00:00.000Z",
+            source_project: "p",
+            memory_count: 2,
+            vector_dimensions: 2,
+          }),
+          JSON.stringify({ id: "a", vector: [0.1, 0.2], metadata: { ok: true } }),
+        ].join("\n"),
+      );
+
+      const validation = validateRvfFormat(p);
+      expect(validation.valid).toBe(false);
+      expect(validation.error).toContain("memory_count");
     });
   });
 });
