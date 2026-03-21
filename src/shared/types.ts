@@ -220,3 +220,30 @@ export interface LoggerLike {
   warn(event: string, metadata?: Record<string, unknown>): void;
   error(event: string, metadata?: Record<string, unknown>): void;
 }
+
+// ---------------------------------------------------------------------------
+// Feedback types (Story 3.1)
+// ---------------------------------------------------------------------------
+
+/** Allowed feedback values for memory_learn_from_feedback. */
+export type FeedbackType = "helpful" | "incorrect" | "duplicate" | "outdated";
+
+/** Input shape for the memory_learn_from_feedback tool. */
+export interface MemoryFeedbackInput {
+  memory_id: string;
+  feedback_type: FeedbackType;
+  /** Optional actor/caller identifier – defaults to "agent". */
+  source?: string;
+  /** Optional free-text reason surfaced alongside feedback in metadata. */
+  context?: string;
+}
+
+/** Result returned by memory_learn_from_feedback on success. */
+export interface MemoryFeedbackResult {
+  memory_id: string;
+  feedback_type: FeedbackType;
+  previous_confidence: number;
+  new_confidence: number;
+  total_feedback_count: number;
+}
+

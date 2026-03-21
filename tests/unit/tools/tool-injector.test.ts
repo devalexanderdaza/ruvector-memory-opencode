@@ -71,10 +71,11 @@ describe("registered tool handlers", () => {
       code: "PLUGIN_NOT_ACTIVATED",
     });
 
-    // Learn tool is still a stub (implemented later), so it remains ENOTIMPLEMENTED.
+    // Learn tool is now implemented; Zod validation runs before plugin checks,
+    // so invalid input ("z" is not a valid object) → INVALID_FEEDBACK_TYPE.
     expect(learnResult).toMatchObject({
       success: false,
-      code: "ENOTIMPLEMENTED",
+      code: "INVALID_FEEDBACK_TYPE",
     });
   });
 });

@@ -4,6 +4,7 @@ import { logger } from "../shared/logger.js";
 import type {
   InitResult,
   MemorySearchFilters,
+  MemorySearchItem,
   MemorySaveResult,
   MemorySearchResult,
   RuVectorMemoryConfig,
@@ -377,12 +378,87 @@ export class VectorStoreAdapter {
     };
   }
 
+  public async getById(id: string): Promise<ToolResponse<MemorySearchItem>> {
+    const db = await this.getDbOrNull();
+    if (!db) {
+      return {
+        success: false,
+        error: "Memory database is not ready",
+        code: "ENOTREADY",
+        reason: "initialization",
+      };
+    }
+
+    const entry = await db.get(id);
+    if (!entry) {
+      return {
+        success: false,
+        error: `Memory with id "${id}" not found`,
+        code: "MEMORY_NOT_FOUND",
+        reason: "not_found",
+      };
+    }
+
+    const metadata = parseMetadata(entry.metadata) ?? {};
+    const content = typeof metadata.content === "string" ? metadata.content : undefined;
+
+    return {
+      success: true,
+      data: {
+        id,
+        score: 0,
+        ...(content !== undefined && { content }),
+        metadata,
+      },
+    };
+  }
+
+  public async updateMetadata(
+    id: string,
+    updatedMetadata: Record<string, unknown>,
+  ): Promise<ToolResponse<{ id: string }>> {
+    const db = await this.getDbOrNull();
+    if (!db) {
+      return {
+        success: false,
+        error: "Memory database is not ready",
+        code: "ENOTREADY",
+        reason: "initialization",
+      };
+    }
+
+    // Retrieve existing entry to get its vector so we can upsert.
+    const existing = await db.get(id);
+    if (!existing) {
+      return {
+        success: false,
+        error: `Memory with id "${id}" not found`,
+        code: "MEMORY_NOT_FOUND",
+        reason: "not_found",
+      };
+    }
+
+    // Re-insert with the same id and vector, merging metadata.
+    // @ruvector/core insert with an explicit id performs an upsert.
+    const existingMetadata = parseMetadata(existing.metadata) ?? {};
+    const merged = { ...existingMetadata, ...updatedMetadata };
+
+    await db.insert({
+      id,
+      vector: existing.vector,
+      metadata: JSON.stringify(merged),
+    });
+
+    return { success: true, data: { id } };
+  }
+
   public resetForTests(): void {
     this.initPromise = null;
     this.lastInitResult = null;
     this.db = null;
   }
 }
+
 
 export function createVectorStoreAdapter(
   config: RuVectorMemoryConfig,
