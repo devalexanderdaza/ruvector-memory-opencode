@@ -26,8 +26,12 @@ export class InitializationError extends RuVectorMemoryError {
 }
 
 /**
- * Thrown (and immediately caught) when feedback_type is not one of the allowed
- * enum values: "helpful" | "incorrect" | "duplicate" | "outdated".
+ * Semantic error class for invalid feedback_type values.
+ *
+ * **Note:** Tool handlers return plain `ToolResponse` literals (never throw),
+ * so this class is not instantiated in production code. It serves as:
+ *  1. A canonical definition of the `"INVALID_FEEDBACK_TYPE"` error code.
+ *  2. A reusable constructor for future higher-level error handling layers.
  */
 export class FeedbackValidationError extends RuVectorMemoryError {
   public constructor(
@@ -39,8 +43,11 @@ export class FeedbackValidationError extends RuVectorMemoryError {
 }
 
 /**
- * Thrown (and immediately caught) when the requested memory_id does not exist
- * in the vector database.
+ * Semantic error class for when a memory_id does not exist in the database.
+ *
+ * **Note:** Tool handlers return plain `ToolResponse` literals (never throw),
+ * so this class is not instantiated in production code. It serves as a
+ * canonical definition of the `"MEMORY_NOT_FOUND"` error code.
  */
 export class MemoryNotFoundError extends RuVectorMemoryError {
   public constructor(message: string) {
@@ -50,8 +57,11 @@ export class MemoryNotFoundError extends RuVectorMemoryError {
 }
 
 /**
- * Thrown (and immediately caught) when the plugin / vector store is not yet
- * activated at the time the tool is invoked.
+ * Semantic error class for when the plugin / vector store is not yet activated.
+ *
+ * **Note:** Tool handlers return plain `ToolResponse` literals (never throw),
+ * so this class is not instantiated in production code. It serves as a
+ * canonical definition of the `"ENOTREADY"` error code.
  */
 export class NotReadyError extends RuVectorMemoryError {
   public constructor(message = "Plugin not activated – vector store unavailable") {
@@ -59,3 +69,4 @@ export class NotReadyError extends RuVectorMemoryError {
     this.name = "NotReadyError";
   }
 }
+

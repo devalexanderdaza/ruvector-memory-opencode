@@ -107,7 +107,9 @@ export function createMemoryLearnTool(): (
     const prevPos = Math.max(0, Number(metadata["positiveFeedbackCount"] ?? 0));
     const prevNeg = Math.max(0, Number(metadata["negativeFeedbackCount"] ?? 0));
     const access = Math.max(0, Number(metadata["accessCount"] ?? 0));
-    const prevConfidence = Number(metadata["confidence"] ?? 0);
+    // Use typeof guard: null passes ?? 0 but would give Number(null)=0 instead of stored value.
+    const rawConf = metadata["confidence"];
+    const prevConfidence = typeof rawConf === "number" && isFinite(rawConf) ? rawConf : 0;
 
     // ------------------------------------------------------------------
     // 5. Increment the appropriate counter
@@ -115,6 +117,8 @@ export function createMemoryLearnTool(): (
     let newPos = prevPos;
     let newNeg = prevNeg;
 
+    // Note: feedback does NOT increment accessCount. Only memory_search (agent-context reads)
+    // counts as an "access" for the confidence formula. Feedback is a separate signal.
     switch (feedback_type as FeedbackType) {
       case "helpful":
         newPos += 1;

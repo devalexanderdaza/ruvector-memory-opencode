@@ -406,11 +406,15 @@ export class VectorStoreAdapter {
       success: true,
       data: {
         id,
+        // score: 0 is a sentinel — getById does not perform vector search so
+        // there is no cosine distance to report. Do NOT mix results from
+        // getById and search() in ranked lists.
         score: 0,
         ...(content !== undefined && { content }),
         metadata,
       },
     };
+
   }
 
   public async updateMetadata(
