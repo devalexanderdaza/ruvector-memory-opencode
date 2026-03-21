@@ -20,6 +20,16 @@ const MemoryFeedbackInputSchema = z.object({
   }),
   source: z.string().optional(),
   context: z.string().optional(),
+  canonical_id: z.string().optional(),
+}).refine(data => {
+  // If feedback_type is duplicate, canonical_id MUST be provided
+  if (data.feedback_type === "duplicate" && (!data.canonical_id || data.canonical_id.trim() === "")) {
+    return false;
+  }
+  return true;
+}, {
+  message: "canonical_id is required when feedback_type is 'duplicate'",
+  path: ["canonical_id"]
 });
 
 // ---------------------------------------------------------------------------
@@ -51,15 +61,16 @@ export function createMemoryLearnTool(): (
         firstIssue?.message ??
         "Invalid input – expected { memory_id: string, feedback_type: 'helpful'|'incorrect'|'duplicate'|'outdated' }";
       logger.warn("feedback_input_invalid", { error: message, input });
+      const code = firstIssue?.path.includes("canonical_id") ? "MISSING_CANONICAL_ID" : "INVALID_FEEDBACK_TYPE";
       return {
         success: false,
         error: message,
-        code: "INVALID_FEEDBACK_TYPE",
+        code: code,
         reason: "validation",
       };
     }
 
-    const { memory_id, feedback_type, source, context } = parseResult.data;
+    const { memory_id, feedback_type, source, context, canonical_id } = parseResult.data;
 
     // ------------------------------------------------------------------
     // 2. Ensure plugin + database are ready
@@ -130,10 +141,13 @@ export function createMemoryLearnTool(): (
           break;
       }
 
+      const isDuplicate = feedback_type === "duplicate" || metadata["mergedIntoId"] !== undefined;
+
       newConfidence = computeConfidence({
         accessCount: access,
         positiveFeedbackCount: newPos,
         negativeFeedbackCount: newNeg,
+        isDuplicate,
       });
       totalFeedback = newPos + newNeg;
 
@@ -146,6 +160,11 @@ export function createMemoryLearnTool(): (
         confidence: newConfidence,
         lastFeedbackAt: new Date().toISOString(),
       };
+
+      if (feedback_type === "duplicate" && canonical_id) {
+        updatedMetadata["mergedIntoId"] = canonical_id;
+        updatedMetadata["duplicateOf"] = canonical_id;
+      }
 
       if (source !== undefined) {
         updatedMetadata["feedbackSource"] = source;
@@ -197,6 +216,7 @@ export function createMemoryLearnTool(): (
         previous_confidence: prevConfidence,
         new_confidence: newConfidence,
         total_feedback_count: totalFeedback,
+        merged_into_id: canonical_id,
       },
     };
   };

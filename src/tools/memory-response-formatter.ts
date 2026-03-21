@@ -149,6 +149,7 @@ function formatSearchResult(item: {
     accessCount: metadata.accessCount as number | undefined,
     positiveFeedbackCount: metadata.positiveFeedbackCount as number | undefined,
     negativeFeedbackCount: metadata.negativeFeedbackCount as number | undefined,
+    isDuplicate: (metadata.mergedIntoId as string | undefined) !== undefined,
   });
 
   const explicitConfidence = typeof metadata.confidence === "number" && Number.isFinite(metadata.confidence)
@@ -174,6 +175,7 @@ function formatSearchResult(item: {
     // An empty array means "detected, no known frameworks" which is distinct
     // from undefined ("metadata absent").
     ...(frameworks !== undefined && { frameworks }),
+    ...(metadata.mergedIntoId !== undefined && { mergedIntoId: metadata.mergedIntoId as string }),
   };
 }
 

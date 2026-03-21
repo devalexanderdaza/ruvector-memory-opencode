@@ -151,6 +151,7 @@ describe("Feedback round-trip integration", () => {
     const finalResult = await memoryLearn({
       memory_id: memoryId,
       feedback_type: "duplicate",
+      canonical_id: "ffffffff-ffff-ffff-ffff-ffffffffffff",
     });
 
     expect(finalResult.success).toBe(true);

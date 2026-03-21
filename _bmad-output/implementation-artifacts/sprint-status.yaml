@@ -68,7 +68,7 @@ development_status:
   3-1-structured-feedback-capture-for-memories: done
   3-2-positive-feedback-reinforcement: done
   3-3-negative-feedback-deprioritization: done
-  3-4-duplicate-detection-and-memory-merge-workflow: backlog
+  3-4-duplicate-detection-and-memory-merge-workflow: review
   3-5-pattern-level-auto-deprioritization: backlog
   3-6-learning-metrics-and-audit-history: backlog
   epic-3-retrospective: optional

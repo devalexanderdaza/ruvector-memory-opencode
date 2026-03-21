@@ -25,6 +25,7 @@ export interface MemoryWithFeedback {
   accessCount?: number | undefined;
   positiveFeedbackCount?: number | undefined;
   negativeFeedbackCount?: number | undefined;
+  isDuplicate?: boolean | undefined;
 }
 
 /**
@@ -47,7 +48,8 @@ export function computeConfidence(memory: MemoryWithFeedback): number {
   const normalizeAccessCount = Math.min(accessCount / 10, 1.0);
 
   // Auto-deprioritize completely if 3 or more negative reports (FR16 threshold)
-  if (negativeFeedback >= 3) {
+  // OR if marked as a duplicate
+  if (negativeFeedback >= 3 || memory.isDuplicate === true) {
     return -1.0;
   }
 

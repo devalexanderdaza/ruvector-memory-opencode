@@ -176,6 +176,8 @@ export interface SearchResult {
   projectType?: string;
   primaryLanguage?: string;
   frameworks?: string[];
+  /** Optional reference to a canonical memory if this is a duplicate. */
+  mergedIntoId?: string | undefined;
 }
 
 /**
@@ -236,6 +238,8 @@ export interface MemoryFeedbackInput {
   source?: string;
   /** Optional free-text reason surfaced alongside feedback in metadata. */
   context?: string;
+  /** Optional ID of the canonical memory if feedback_type is 'duplicate'. */
+  canonical_id?: string;
 }
 
 /** Result returned by memory_learn_from_feedback on success. */
@@ -245,5 +249,7 @@ export interface MemoryFeedbackResult {
   previous_confidence: number;
   new_confidence: number;
   total_feedback_count: number;
+  /** Present if feedback_type was "duplicate" and a canonical ID was linked. */
+  merged_into_id?: string | undefined;
 }
 
