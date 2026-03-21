@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-21
-last_updated: 2026-03-21T11:51:00Z
+last_updated: 2026-03-21T12:20:00Z
 project: ruvector-memory-opencode
 project_key: NOKEY
 tracking_system: file-system
@@ -75,7 +75,7 @@ development_status:
 
   # Epic 4: Knowledge Portability and Collaboration
   epic-4: in-progress
-  4-1-full-memory-export-to-rvf: review
+  4-1-full-memory-export-to-rvf: done
   4-2-safe-import-from-rvf: backlog
   4-3-conflict-resolution-during-import: backlog
   4-4-backward-compatible-rvf-version-handling: backlog

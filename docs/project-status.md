@@ -57,7 +57,7 @@ The plugin is functional and suitable for use. Core memory features (save and se
 
 | Feature                      | Notes                                                           |
 | ---------------------------- | --------------------------------------------------------------- |
-| `.rvf` format export/import  | Portable memory snapshots for sharing between environments      |
+| `.rvf` format import         | Portable memory snapshots import between environments           |
 | Memory TTL and expiration    | Automatic removal of stale memories based on `importance_decay` |
 | Batch import from files      | Import memories from markdown, JSON, or text files              |
 | Memory deduplication         | Detect and merge near-duplicate memories                        |
@@ -65,6 +65,12 @@ The plugin is functional and suitable for use. Core memory features (save and se
 | Browser/Edge runtime support | Currently Node.js only                                          |
 | MCP server integration       | Expose memory tools via Model Context Protocol                  |
 | Python/Go bindings           | SDK for non-Node.js environments                                |
+
+### ✅ Recently Completed
+
+| Feature              | Status      | Notes                                                       |
+| -------------------- | ----------- | ----------------------------------------------------------- |
+| `.rvf` format export | ✅ Complete | Full project memory export to portable RVF format available |
 
 ---
 
