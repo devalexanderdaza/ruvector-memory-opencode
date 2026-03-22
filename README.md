@@ -1,5 +1,11 @@
 # @ruvector/opencode-memory
+## Archived Project ⚠️
 
+This repository has been **archived** as it was a proof of concept for context testing. The actively maintained project is: [devalexanderdaza/ai-vector-memories](https://github.com/devalexanderdaza/ai-vector-memories).
+
+For ongoing development, contributions, or usage, please refer to the new repository.
+
+---
 Local-first memory plugin for OpenCode with automatic activation and Node.js runtime guards.
 
 ## Quick Start
